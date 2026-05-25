@@ -15,6 +15,7 @@
   <meta name="twitter:image" content="https://yuvrajrajput.github.io/swasthya-ai/assets/og-image.png" />
   <link rel="icon" href="assets/logo.png" type="image/png" />
   <link rel="apple-touch-icon" href="assets/og-image.png" />
+  <link rel="icon" type="image/svg+xml" href="swasthya-ai-icon.svg">
   <title>Swasthya AI — अपना स्वास्थ्य सहायक</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -460,7 +461,10 @@
 <body>
   <nav class="navbar" id="navbar">
     <a href="#" class="logo">
-      <img src="assets/logo.svg" alt="" class="logo-img" width="40" height="40" />
+      <img src="swasthya-ai-icon.svg" 
+           alt="Swasthya AI" 
+           width="32" height="32" 
+           style="border-radius:8px;">
       Swasthya AI
     </a>
     <a href="#waitlist" class="nav-cta">Try Now</a>
@@ -594,8 +598,7 @@
     <h2 class="section-heading">Pehle Users mein shamil ho!</h2>
     <p class="section-sub">Launch pe sabse pehle access pao</p>
     <div class="waitlist-wrap">
-      <!-- Replace xxxxxxxx with your Formspree form ID from formspree.io -->
-      <form id="waitlistForm" action="https://formspree.io/f/xxxxxxxx" method="POST" novalidate>
+      <form id="waitlistForm" novalidate>
         <div class="form-group">
           <label for="name">Naam</label>
           <input type="text" id="name" name="name" placeholder="Aapka naam" required autocomplete="name" />
@@ -688,6 +691,8 @@
       const successMsg = document.getElementById("successMsg");
       const errorMsg = document.getElementById("errorMsg");
       const submitBtn = form.querySelector(".btn-submit");
+      // Replace with your Formspree endpoint after creating account at formspree.io
+      const FORMSPREE_URL = "https://formspree.io/f/xxxxxxxx";
 
       function validateField(input) {
         var valid = true;
@@ -700,7 +705,7 @@
         return valid;
       }
 
-      form.addEventListener("submit", function (e) {
+      form.addEventListener("submit", async function (e) {
         e.preventDefault();
         errorMsg.classList.remove("show");
 
@@ -714,30 +719,31 @@
         submitBtn.disabled = true;
         submitBtn.textContent = "Submit ho raha hai...";
 
-        fetch(form.action, {
-          method: "POST",
-          body: new FormData(form),
-          headers: { Accept: "application/json" }
-        })
-          .then(function (response) {
-            if (response.ok) {
-              form.classList.add("hidden");
-              errorMsg.classList.remove("show");
-              successMsg.classList.add("show");
-            } else {
-              return response.json().then(function (data) {
-                throw new Error(data.error || "Submission failed");
-              });
-            }
-          })
-          .catch(function () {
-            errorMsg.classList.add("show");
-            successMsg.classList.remove("show");
-          })
-          .finally(function () {
-            submitBtn.disabled = false;
-            submitBtn.textContent = "Join Waitlist 🚀";
+        const formData = {
+          name: document.getElementById("name").value.trim(),
+          contact: document.getElementById("contact").value.trim(),
+          city: document.getElementById("city").value.trim(),
+          role: document.getElementById("role").value,
+        };
+
+        try {
+          const response = await fetch(FORMSPREE_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(formData),
           });
+          if (!response.ok) throw new Error("Submission failed");
+          form.classList.add("hidden");
+          errorMsg.classList.remove("show");
+          successMsg.classList.add("show");
+        } catch (e) {
+          console.error("Formspree error", e);
+          errorMsg.classList.add("show");
+          successMsg.classList.remove("show");
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Join Waitlist 🚀";
+        }
       });
 
       form.querySelectorAll("input, select").forEach(function (field) {
