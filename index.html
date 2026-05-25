@@ -95,6 +95,7 @@
       margin: 0 auto 1.25rem;
       border-radius: 20px;
       box-shadow: var(--shadow);
+      display: block;
     }
     .nav-cta {
       background: var(--saffron);
@@ -114,7 +115,9 @@
     section {
       padding: 4rem 1.25rem;
       max-width: 1100px;
-      margin: 0 auto;
+      width: 100%;
+      margin-left: auto;
+      margin-right: auto;
     }
     .section-heading {
       text-align: center;
@@ -181,7 +184,15 @@
       0%, 100% { transform: translateY(0) rotate(0deg); }
       50% { transform: translateY(-14px) rotate(6deg); }
     }
-    .hero-content { position: relative; z-index: 1; max-width: 640px; padding: 0 0.5rem; }
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 640px;
+      width: 100%;
+      padding: 0 0.5rem;
+      margin-left: auto;
+      margin-right: auto;
+    }
     .hero h1 {
       font-size: clamp(2.2rem, 9vw, 3.4rem);
       color: var(--saffron);
@@ -293,7 +304,15 @@
     }
 
     /* Problem section */
-    .problem { background: var(--white); border-radius: 24px; margin: 0 1rem 2rem; max-width: calc(1100px - 2rem); }
+    .problem {
+      background: var(--white);
+      border-radius: 24px;
+      margin-left: auto;
+      margin-right: auto;
+      margin-bottom: 0;
+      width: 100%;
+      max-width: 1100px;
+    }
 
     /* Solution */
     .solution-card { border-top: 4px solid var(--green); }
@@ -340,8 +359,10 @@
       background: linear-gradient(135deg, rgba(0, 168, 107, 0.08) 0%, rgba(255, 107, 43, 0.06) 100%);
       border-radius: 24px;
       padding: 3rem 1.5rem;
-      margin: 0 1rem;
-      max-width: calc(1100px - 2rem);
+      margin-left: auto;
+      margin-right: auto;
+      width: 100%;
+      max-width: 1100px;
     }
     .trust .card { text-align: center; }
     .trust .card .icon { font-size: 2.5rem; }
@@ -476,7 +497,7 @@
     <span class="hero-float f2" aria-hidden="true">💊</span>
     <span class="hero-float f3" aria-hidden="true">🏥</span>
     <div class="hero-content reveal">
-      <img src="assets/logo.svg" alt="Swasthya AI" class="hero-logo" width="88" height="88" />
+      <img src="swasthya-ai-icon.svg" alt="Swasthya AI" class="hero-logo" width="88" height="88" />
       <h1>अपना स्वास्थ्य सहायक</h1>
       <p class="subtitle">Your Free AI Health Friend — in Hindi</p>
       <p class="subtext">
@@ -641,7 +662,7 @@
     <p class="brand">Swasthya AI © 2026 — Made with ❤️ for Bharat 🇮🇳</p>
     <div class="links">
       <a href="https://github.com/yuvrajrajput/swasthya-ai" target="_blank" rel="noopener noreferrer">GitHub</a>
-      <a href="mailto:contact@swasthya-ai.in">Contact</a>
+      <a href="https://github.com/yuvrajrajput/swasthya-ai/issues/new" target="_blank" rel="noopener noreferrer">Contact</a>
     </div>
     <p class="disclaimer">
       Ye app medical diagnosis nahi deta. Serious symptoms ke liye doctor se milein.
@@ -691,8 +712,9 @@
       const successMsg = document.getElementById("successMsg");
       const errorMsg = document.getElementById("errorMsg");
       const submitBtn = form.querySelector(".btn-submit");
-      // Replace with your Formspree endpoint after creating account at formspree.io
-      const FORMSPREE_URL = "https://formspree.io/f/xxxxxxxx";
+      // Paste YOUR form ID from formspree.io → New Form → Integration (not xxxxxxxx)
+      const FORMSPREE_FORM_ID = "xxxxxxxx";
+      const FORMSPREE_URL = "https://formspree.io/f/" + FORMSPREE_FORM_ID;
 
       function validateField(input) {
         var valid = true;
@@ -707,6 +729,7 @@
 
       form.addEventListener("submit", async function (e) {
         e.preventDefault();
+        errorMsg.textContent = "⚠️ Kuch galat ho gaya. Kripya dubara try karein.";
         errorMsg.classList.remove("show");
 
         var fields = form.querySelectorAll("input[required], select[required]");
@@ -715,6 +738,12 @@
           if (!validateField(field)) allValid = false;
         });
         if (!allValid) return;
+
+        if (FORMSPREE_FORM_ID === "xxxxxxxx") {
+          errorMsg.textContent = "⚠️ Formspree ID set nahi hai. index.html mein FORMSPREE_FORM_ID apna form ID likhein.";
+          errorMsg.classList.add("show");
+          return;
+        }
 
         submitBtn.disabled = true;
         submitBtn.textContent = "Submit ho raha hai...";
@@ -738,6 +767,7 @@
           successMsg.classList.add("show");
         } catch (e) {
           console.error("Formspree error", e);
+          errorMsg.textContent = "⚠️ Kuch galat ho gaya. Kripya dubara try karein.";
           errorMsg.classList.add("show");
           successMsg.classList.remove("show");
         } finally {
