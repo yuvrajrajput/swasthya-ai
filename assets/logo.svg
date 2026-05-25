@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Swasthya AI">
+  <rect width="512" height="512" rx="112" fill="#FF6B2B"/>
+  <g fill="#FFFFFF" stroke="#FFFFFF" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="176" cy="168" r="36" fill="#FFFFFF" stroke="none"/>
+    <circle cx="336" cy="168" r="36" fill="#FFFFFF" stroke="none"/>
+    <path d="M212 168 H300 Q256 168 256 220 V300" fill="none"/>
+    <circle cx="256" cy="368" r="72" fill="#FFFFFF" stroke="none"/>
+  </g>
+  <path d="M232 348 H280 M256 324 V372" stroke="#FF6B2B" stroke-width="22" stroke-linecap="round"/>
+  <circle cx="400" cy="112" r="72" fill="#00A86B"/>
+  <text x="400" y="128" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="52" font-weight="700">AI</text>
+</svg>

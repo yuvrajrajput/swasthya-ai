@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Swasthya AI — Free Hindi AI health assistant for Bharat. Symptoms in Hindi/Hinglish, instant friendly guidance." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Swasthya AI — अपना स्वास्थ्य सहायक" />
+  <meta property="og:description" content="Free Hindi AI health assistant for Bharat" />
+  <meta property="og:url" content="https://yuvrajrajput.github.io/swasthya-ai/" />
+  <meta property="og:image" content="https://yuvrajrajput.github.io/swasthya-ai/assets/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Swasthya AI — अपना स्वास्थ्य सहायक" />
+  <meta name="twitter:description" content="Free Hindi AI health assistant for Bharat" />
+  <meta name="twitter:image" content="https://yuvrajrajput.github.io/swasthya-ai/assets/og-image.png" />
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/og-image.png" />
+  <title>Swasthya AI — अपना स्वास्थ्य सहायक</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --saffron: #FF6B2B;
+      --saffron-dark: #e55a1f;
+      --cream: #FFF8F3;
+      --green: #00A86B;
+      --green-dark: #008f5c;
+      --text: #1a1a1a;
+      --text-muted: #5c534d;
+      --white: #ffffff;
+      --shadow: 0 8px 32px rgba(255, 107, 43, 0.12);
+      --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.06);
+      --radius: 16px;
+      --nav-h: 64px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Noto Sans", system-ui, sans-serif;
+      background: var(--cream);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3, .font-heading {
+      font-family: "Baloo 2", cursive;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+
+    /* Navbar */
+    .navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: var(--nav-h);
+      background: rgba(255, 248, 243, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 107, 43, 0.12);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.25rem;
+      transition: transform 0.35s ease;
+    }
+    .navbar.hidden { transform: translateY(-100%); }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: "Baloo 2", cursive;
+      font-weight: 800;
+      font-size: 1.35rem;
+      color: var(--saffron);
+    }
+    .logo-img {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      border-radius: 10px;
+      object-fit: contain;
+    }
+    .hero-logo {
+      width: 88px;
+      height: 88px;
+      margin: 0 auto 1.25rem;
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+    }
+    .nav-cta {
+      background: var(--saffron);
+      color: var(--white);
+      padding: 0.5rem 1.1rem;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .nav-cta:hover {
+      background: var(--saffron-dark);
+      transform: translateY(-1px);
+    }
+
+    /* Sections */
+    section {
+      padding: 4rem 1.25rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .section-heading {
+      text-align: center;
+      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    .section-sub {
+      text-align: center;
+      color: var(--text-muted);
+      margin-bottom: 2.5rem;
+      font-size: 0.95rem;
+    }
+
+    /* Fade-in */
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.65s ease, transform 0.65s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Hero */
+    .hero {
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding-top: calc(var(--nav-h) + 2rem);
+      padding-bottom: 3rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+      max-width: 100%;
+      overflow: hidden;
+    }
+    .hero-pulse {
+      position: absolute;
+      inset: -20%;
+      background: radial-gradient(circle at 50% 40%, rgba(255, 107, 43, 0.14) 0%, transparent 55%),
+                  radial-gradient(circle at 80% 80%, rgba(0, 168, 107, 0.08) 0%, transparent 40%);
+      animation: pulse 6s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.7; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+    .hero-float {
+      position: absolute;
+      font-size: clamp(2rem, 8vw, 3.5rem);
+      opacity: 0.35;
+      animation: float 5s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .hero-float.f1 { top: 18%; left: 8%; animation-delay: 0s; }
+    .hero-float.f2 { top: 25%; right: 10%; animation-delay: 1.2s; }
+    .hero-float.f3 { bottom: 22%; left: 12%; animation-delay: 2.4s; }
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-14px) rotate(6deg); }
+    }
+    .hero-content { position: relative; z-index: 1; max-width: 640px; padding: 0 0.5rem; }
+    .hero h1 {
+      font-size: clamp(2.2rem, 9vw, 3.4rem);
+      color: var(--saffron);
+      margin-bottom: 0.35rem;
+    }
+    .hero .subtitle {
+      font-family: "Baloo 2", cursive;
+      font-size: clamp(1.1rem, 4vw, 1.45rem);
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+    .hero .subtext {
+      color: var(--text-muted);
+      font-size: clamp(0.95rem, 3.5vw, 1.05rem);
+      margin-bottom: 2rem;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .hero-badges {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-bottom: 1.75rem;
+    }
+    .badge {
+      background: var(--white);
+      border: 1px solid rgba(0, 168, 107, 0.25);
+      color: var(--green);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+    }
+    .hero-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.85rem 1.6rem;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 1rem;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+    .btn-primary {
+      background: var(--saffron);
+      color: var(--white);
+      box-shadow: 0 6px 24px rgba(255, 107, 43, 0.35);
+    }
+    .btn-primary:hover {
+      background: var(--saffron-dark);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 28px rgba(255, 107, 43, 0.4);
+    }
+    .btn-outline {
+      background: var(--white);
+      color: var(--saffron);
+      border: 2px solid var(--saffron);
+    }
+    .btn-outline:hover {
+      background: rgba(255, 107, 43, 0.08);
+      transform: translateY(-2px);
+    }
+
+    /* Cards grid */
+    .cards {
+      display: grid;
+      gap: 1.25rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 600px) {
+      .cards.cols-3 { grid-template-columns: repeat(3, 1fr); }
+      .cards.cols-4 { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 900px) {
+      .cards.cols-4 { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .card {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      box-shadow: var(--shadow-card);
+      border: 1px solid rgba(255, 107, 43, 0.08);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .card:hover {
+      transform: translateY(-6px);
+      box-shadow: var(--shadow);
+    }
+    .card .icon { font-size: 2.2rem; margin-bottom: 0.75rem; display: block; }
+    .card h3 {
+      font-size: 1.1rem;
+      margin-bottom: 0.4rem;
+      color: var(--text);
+    }
+    .card p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    /* Problem section */
+    .problem { background: var(--white); border-radius: 24px; margin: 0 1rem 2rem; max-width: calc(1100px - 2rem); }
+
+    /* Solution */
+    .solution-card { border-top: 4px solid var(--green); }
+    .solution-card:hover { border-top-color: var(--saffron); }
+
+    /* Steps */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    .step {
+      display: flex;
+      gap: 1.25rem;
+      align-items: flex-start;
+      background: var(--white);
+      padding: 1.25rem 1.5rem;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+      transition: transform 0.25s;
+    }
+    .step:hover { transform: translateX(6px); }
+    .step-num {
+      flex-shrink: 0;
+      width: 48px;
+      height: 48px;
+      background: var(--saffron);
+      color: var(--white);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Baloo 2", cursive;
+      font-weight: 800;
+      font-size: 1.35rem;
+    }
+    .step h3 { font-size: 1.05rem; margin-bottom: 0.25rem; }
+    .step p { font-size: 0.9rem; color: var(--text-muted); }
+
+    /* Trust */
+    .trust {
+      background: linear-gradient(135deg, rgba(0, 168, 107, 0.08) 0%, rgba(255, 107, 43, 0.06) 100%);
+      border-radius: 24px;
+      padding: 3rem 1.5rem;
+      margin: 0 1rem;
+      max-width: calc(1100px - 2rem);
+    }
+    .trust .card { text-align: center; }
+    .trust .card .icon { font-size: 2.5rem; }
+
+    /* Waitlist */
+    .waitlist-wrap {
+      background: var(--white);
+      border-radius: 24px;
+      padding: 2.5rem 1.5rem;
+      box-shadow: var(--shadow);
+      border: 2px solid rgba(255, 107, 43, 0.15);
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .form-group { margin-bottom: 1rem; text-align: left; }
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      color: var(--text);
+    }
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid #e0d5cc;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 1rem;
+      background: var(--cream);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--saffron);
+      box-shadow: 0 0 0 3px rgba(255, 107, 43, 0.2);
+    }
+    .form-group input.error { border-color: #c0392b; }
+    .form-error {
+      font-size: 0.8rem;
+      color: #c0392b;
+      margin-top: 0.25rem;
+      display: none;
+    }
+    .form-group input.error + .form-error,
+    .form-group select.error + .form-error { display: block; }
+    .btn-submit {
+      width: 100%;
+      margin-top: 0.5rem;
+      padding: 1rem;
+      font-size: 1.05rem;
+    }
+    .success-msg {
+      display: none;
+      text-align: center;
+      padding: 1.5rem 0.5rem;
+      font-size: 1.05rem;
+      color: var(--green-dark);
+      font-weight: 500;
+      line-height: 1.7;
+    }
+    .success-msg.show { display: block; }
+    .error-msg {
+      display: none;
+      text-align: center;
+      padding: 1rem 0.5rem 0;
+      font-size: 0.95rem;
+      color: #c0392b;
+      font-weight: 500;
+      line-height: 1.6;
+    }
+    .error-msg.show { display: block; }
+    #waitlistForm.hidden { display: none; }
+    .btn-submit:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Footer */
+    footer {
+      background: var(--text);
+      color: rgba(255, 255, 255, 0.85);
+      padding: 2.5rem 1.25rem 2rem;
+      text-align: center;
+      margin-top: 2rem;
+    }
+    footer .brand {
+      font-family: "Baloo 2", cursive;
+      font-size: 1.1rem;
+      color: var(--white);
+      margin-bottom: 1rem;
+    }
+    footer .links {
+      display: flex;
+      gap: 1.5rem;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+    }
+    footer .links a {
+      color: var(--saffron);
+      font-weight: 600;
+      transition: color 0.2s;
+    }
+    footer .links a:hover { color: #ff9a6b; }
+    footer .disclaimer {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.55);
+      max-width: 520px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar" id="navbar">
+    <a href="#" class="logo">
+      <img src="assets/logo.svg" alt="" class="logo-img" width="40" height="40" />
+      Swasthya AI
+    </a>
+    <a href="#waitlist" class="nav-cta">Try Now</a>
+  </nav>
+
+  <header class="hero" id="hero">
+    <div class="hero-pulse" aria-hidden="true"></div>
+    <span class="hero-float f1" aria-hidden="true">🩺</span>
+    <span class="hero-float f2" aria-hidden="true">💊</span>
+    <span class="hero-float f3" aria-hidden="true">🏥</span>
+    <div class="hero-content reveal">
+      <img src="assets/logo.svg" alt="Swasthya AI" class="hero-logo" width="88" height="88" />
+      <h1>अपना स्वास्थ्य सहायक</h1>
+      <p class="subtitle">Your Free AI Health Friend — in Hindi</p>
+      <p class="subtext">
+        Symptoms describe karo Hindi mein — turant suggestions pao.
+        Free. No signup. No doctor fee.
+      </p>
+      <div class="hero-badges">
+        <span class="badge">100% Free</span>
+        <span class="badge">Hindi & Hinglish</span>
+        <span class="badge">Bharat ke liye</span>
+      </div>
+      <div class="hero-buttons">
+        <a href="#waitlist" class="btn btn-primary">अभी Try करें →</a>
+        <a href="#features" class="btn btn-outline">और जानें ↓</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="problem reveal" id="problem">
+    <h2 class="section-heading">Kya ye aapke saath hota hai?</h2>
+    <p class="section-sub">Common problems — jo har Indian jaanta hai</p>
+    <div class="cards cols-3">
+      <article class="card">
+        <span class="icon">🕐</span>
+        <h3>Doctor ke liye ghanton wait</h3>
+        <p>Clinic ya hospital mein lambi line — time aur taakat dono jaate hain.</p>
+      </article>
+      <article class="card">
+        <span class="icon">💰</span>
+        <h3>Ek consultation = ₹500-2000</h3>
+        <p>Chhoti si problem ke liye bhi kharcha — har baar afford karna mushkil.</p>
+      </article>
+      <article class="card">
+        <span class="icon">😰</span>
+        <h3>Symptoms samjhane mein darr</h3>
+        <p>Doctor ko sahi tarah batana — sharam ya confusion ki wajah se.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="reveal" id="features">
+    <h2 class="section-heading">Swasthya AI — Aapka Hindi Doctor Dost</h2>
+    <p class="section-sub">Rural & semi-urban Bharat ke liye — simple, friendly, turant</p>
+    <div class="cards cols-4">
+      <article class="card solution-card">
+        <span class="icon">🗣️</span>
+        <h3>Hindi & Hinglish mein baat karo</h3>
+        <p>"mujhe bukhaar hai aur headache" — jaise bolo, waise samjhega.</p>
+      </article>
+      <article class="card solution-card">
+        <span class="icon">🚨</span>
+        <h3>Emergency detect — turant 112 alert</h3>
+        <p>Gambhir lakshan pe turant laal warning — 112 ya ER jao.</p>
+      </article>
+      <article class="card solution-card">
+        <span class="icon">🎤</span>
+        <h3>Voice input — bolkar poochho</h3>
+        <p>Likhna mushkil? Mic se bol kar symptoms batao.</p>
+      </article>
+      <article class="card solution-card">
+        <span class="icon">💬</span>
+        <h3>Multi-turn chat — poori baat karo</h3>
+        <p>Ek jawab se kaam na ho — poori conversation yaad rakhta hai.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="reveal" id="how">
+    <h2 class="section-heading">Kaise kaam karta hai?</h2>
+    <p class="section-sub">Teen simple steps — bas itna hi</p>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-num">1</div>
+        <div>
+          <h3>Apne symptoms likho ya bolo</h3>
+          <p>Hindi, Hinglish, ya thoda English — jo comfortable ho.</p>
+        </div>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">2</div>
+        <div>
+          <h3>AI samjhega aur sujhav dega</h3>
+          <p>Samajhdaar, dostana jawab — bina confusing medical shabd ke.</p>
+        </div>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">3</div>
+        <div>
+          <h3>Doctor jaana chahiye ya nahi — clear answer</h3>
+          <p>Ghar par rest ya turant doctor — clear guidance milegi.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="trust reveal" id="trust">
+    <h2 class="section-heading">Surakshit & Bharosemand</h2>
+    <p class="section-sub">Aapki privacy aur safety — pehle number par</p>
+    <div class="cards cols-3">
+      <article class="card">
+        <span class="icon">🔒</span>
+        <h3>Koi personal data store nahi</h3>
+        <p>Waitlist ke alawa — chat data server par save nahi hota.</p>
+      </article>
+      <article class="card">
+        <span class="icon">🏥</span>
+        <h3>Medical disclaimer clearly shown</h3>
+        <p>Ye diagnosis nahi — hamesha doctor ki salah ko priority.</p>
+      </article>
+      <article class="card">
+        <span class="icon">🆓</span>
+        <h3>Hamesha free — koi hidden charge nahi</h3>
+        <p>No signup fee, no subscription — Bharat ke liye muft.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="reveal" id="waitlist">
+    <h2 class="section-heading">Pehle Users mein shamil ho!</h2>
+    <p class="section-sub">Launch pe sabse pehle access pao</p>
+    <div class="waitlist-wrap">
+      <!-- Replace xxxxxxxx with your Formspree form ID from formspree.io -->
+      <form id="waitlistForm" action="https://formspree.io/f/xxxxxxxx" method="POST" novalidate>
+        <div class="form-group">
+          <label for="name">Naam</label>
+          <input type="text" id="name" name="name" placeholder="Aapka naam" required autocomplete="name" />
+          <span class="form-error">Kripya apna naam likhein</span>
+        </div>
+        <div class="form-group">
+          <label for="contact">Mobile ya Email</label>
+          <input type="text" id="contact" name="contact" placeholder="Mobile ya Email" required autocomplete="tel" />
+          <span class="form-error">Mobile ya email zaroori hai</span>
+        </div>
+        <div class="form-group">
+          <label for="city">Shehar</label>
+          <input type="text" id="city" name="city" placeholder="Aapka shehar" required />
+          <span class="form-error">Shehar likhein</span>
+        </div>
+        <div class="form-group">
+          <label for="role">Aap kaun hain?</label>
+          <select id="role" name="role" required>
+            <option value="">Select karein</option>
+            <option value="Common User">Common User</option>
+            <option value="Doctor/Clinic">Doctor/Clinic</option>
+            <option value="NGO/Health Org">NGO/Health Org</option>
+            <option value="Other">Other</option>
+          </select>
+          <span class="form-error">Ek option chunein</span>
+        </div>
+        <button type="submit" class="btn btn-primary btn-submit">Join Waitlist 🚀</button>
+      </form>
+      <div class="success-msg" id="successMsg" role="status">
+        🎉 Shukriya! Aap waitlist mein shamil ho gaye.
+        Launch pe sabse pehle batayenge!
+      </div>
+      <div class="error-msg" id="errorMsg" role="alert">
+        ⚠️ Kuch galat ho gaya. Kripya dubara try karein.
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p class="brand">Swasthya AI © 2026 — Made with ❤️ for Bharat 🇮🇳</p>
+    <div class="links">
+      <a href="https://github.com/yuvrajrajput/swasthya-ai" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="mailto:contact@swasthya-ai.in">Contact</a>
+    </div>
+    <p class="disclaimer">
+      Ye app medical diagnosis nahi deta. Serious symptoms ke liye doctor se milein.
+    </p>
+  </footer>
+
+  <script>
+    (function () {
+      const navbar = document.getElementById("navbar");
+      let lastScrollY = window.scrollY;
+      let ticking = false;
+
+      function onScroll() {
+        const y = window.scrollY;
+        if (y > lastScrollY && y > 80) {
+          navbar.classList.add("hidden");
+        } else {
+          navbar.classList.remove("hidden");
+        }
+        lastScrollY = y;
+        ticking = false;
+      }
+
+      window.addEventListener("scroll", function () {
+        if (!ticking) {
+          requestAnimationFrame(onScroll);
+          ticking = true;
+        }
+      }, { passive: true });
+
+      const reveals = document.querySelectorAll(".reveal");
+      const observer = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("visible");
+            }
+          });
+        },
+        { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
+      );
+      reveals.forEach(function (el) { observer.observe(el); });
+
+      document.querySelector(".hero .reveal").classList.add("visible");
+
+      const form = document.getElementById("waitlistForm");
+      const successMsg = document.getElementById("successMsg");
+      const errorMsg = document.getElementById("errorMsg");
+      const submitBtn = form.querySelector(".btn-submit");
+
+      function validateField(input) {
+        var valid = true;
+        if (input.tagName === "SELECT") {
+          valid = input.value !== "";
+        } else {
+          valid = input.value.trim() !== "";
+        }
+        input.classList.toggle("error", !valid);
+        return valid;
+      }
+
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        errorMsg.classList.remove("show");
+
+        var fields = form.querySelectorAll("input[required], select[required]");
+        var allValid = true;
+        fields.forEach(function (field) {
+          if (!validateField(field)) allValid = false;
+        });
+        if (!allValid) return;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Submit ho raha hai...";
+
+        fetch(form.action, {
+          method: "POST",
+          body: new FormData(form),
+          headers: { Accept: "application/json" }
+        })
+          .then(function (response) {
+            if (response.ok) {
+              form.classList.add("hidden");
+              errorMsg.classList.remove("show");
+              successMsg.classList.add("show");
+            } else {
+              return response.json().then(function (data) {
+                throw new Error(data.error || "Submission failed");
+              });
+            }
+          })
+          .catch(function () {
+            errorMsg.classList.add("show");
+            successMsg.classList.remove("show");
+          })
+          .finally(function () {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Join Waitlist 🚀";
+          });
+      });
+
+      form.querySelectorAll("input, select").forEach(function (field) {
+        field.addEventListener("input", function () {
+          if (field.classList.contains("error")) validateField(field);
+        });
+        field.addEventListener("change", function () {
+          if (field.classList.contains("error")) validateField(field);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
