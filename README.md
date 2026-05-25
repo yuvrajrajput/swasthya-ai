@@ -29,6 +29,32 @@ ANTHROPIC_API_KEY=sk-ant-...
 streamlit run app.py
 ```
 
+## Deploy on Streamlit Cloud
+
+1. Merge latest code to `main` on GitHub: [yuvrajrajput/swasthya-ai](https://github.com/yuvrajrajput/swasthya-ai)
+2. Open **[share.streamlit.io](https://share.streamlit.io)** → sign in with **GitHub**
+3. Click **Create app** → pick repository **`swasthya-ai`**
+4. Set:
+   - **Branch:** `main`
+   - **Main file path:** `app.py`
+5. Click **Advanced settings** → **Secrets** and paste:
+
+```toml
+ANTHROPIC_API_KEY = "sk-ant-your-key-here"
+```
+
+(Get your key from [console.anthropic.com](https://console.anthropic.com/).)
+
+6. Click **Deploy**
+
+Your app URL will look like: `https://swasthya-ai-xxxxx.streamlit.app`
+
+**Notes for Cloud:**
+- `packages.txt` installs **ffmpeg** for voice input on the server
+- Do not commit `.env` — use Streamlit **Secrets** only
+- First deploy may take 2–5 minutes
+- Link this URL from your landing page **Try Now** button when ready
+
 ## Notes
 
 - Uses model `claude-sonnet-4-20250514`.
