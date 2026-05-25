@@ -234,8 +234,9 @@ def main() -> None:
 
     if not os.getenv("ANTHROPIC_API_KEY"):
         st.error(
-            "Claude API key सेट नहीं है। `.env` में `ANTHROPIC_API_KEY` जोड़ें "
-            "(`.env.example` देखें)।"
+            "Claude API key सेट नहीं है। "
+            "**Streamlit Cloud:** Settings → Secrets → `ANTHROPIC_API_KEY = \"sk-ant-...\"` → Reboot. "
+            "**Local:** `.env` में `ANTHROPIC_API_KEY` जोड़ें (`.env.example` देखें)।"
         )
         st.stop()
 

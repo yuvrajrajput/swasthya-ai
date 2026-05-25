@@ -57,7 +57,7 @@ Your app URL will look like: `https://swasthya-ai-xxxxx.streamlit.app`
 
 ## Notes
 
-- Uses model `claude-sonnet-4-20250514`.
+- Uses model `claude-sonnet-4-6` (Claude Sonnet 4.6).
 - Multi-turn chat with `st.session_state` history sent to Claude each turn.
 - Emergency keywords (e.g. chest pain, seene mein dard, behoshi) trigger an immediate Hindi alert to call **112** before Claude responds.
 - Voice: `st.audio_input` (WebM from browser) → pydub/FFmpeg → WAV → Google speech recognition (Hindi); falls back to a “coming soon” note on older Streamlit.
