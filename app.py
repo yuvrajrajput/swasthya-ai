@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 HAS_AUDIO_INPUT = hasattr(st, "audio_input")
 
 EMERGENCY_KEYWORDS = [
