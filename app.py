@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 HAS_AUDIO_INPUT = hasattr(st, "audio_input")
 
 EMERGENCY_KEYWORDS = [
@@ -234,8 +234,9 @@ def main() -> None:
 
     if not os.getenv("ANTHROPIC_API_KEY"):
         st.error(
-            "Claude API key सेट नहीं है। `.env` में `ANTHROPIC_API_KEY` जोड़ें "
-            "(`.env.example` देखें)।"
+            "Claude API key सेट नहीं है। "
+            "**Streamlit Cloud:** Settings → Secrets → `ANTHROPIC_API_KEY = \"sk-ant-...\"` → Reboot. "
+            "**Local:** `.env` में `ANTHROPIC_API_KEY` जोड़ें (`.env.example` देखें)।"
         )
         st.stop()
 
