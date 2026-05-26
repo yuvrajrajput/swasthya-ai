@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MODEL = "claude-sonnet-4-6"
+LOGO_PATH = "swasthya-ai-icon.svg"
 HAS_AUDIO_INPUT = hasattr(st, "audio_input")
 
 EMERGENCY_KEYWORDS = [
@@ -186,8 +187,46 @@ def process_user_message(user_text: str, from_voice: bool = False) -> None:
     st.rerun()
 
 
+def inject_brand_styles() -> None:
+    st.markdown(
+        """
+        <style>
+          .stApp { background-color: #FFF8F3; }
+          [data-testid="stChatMessage"] { line-height: 1.65; }
+          [data-testid="stChatMessage"] h1,
+          [data-testid="stChatMessage"] h2,
+          [data-testid="stChatMessage"] h3 {
+            font-size: 1.05rem !important;
+            margin-top: 0.4rem;
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_header() -> None:
+    col_logo, col_title, col_btn = st.columns([1, 5, 2], vertical_alignment="center")
+    with col_logo:
+        if os.path.isfile(LOGO_PATH):
+            st.image(LOGO_PATH, width=48)
+        else:
+            st.markdown("### 🩺")
+    with col_title:
+        st.markdown("### Swasthya AI")
+        st.caption(
+            "हिंदी या Hinglish में बात करें — सरल सुझाव पाएं "
+            "(जैसे: mujhe bukhaar hai aur headache ho raha hai)"
+        )
+    with col_btn:
+        if st.button("नई बातचीत", use_container_width=True):
+            st.session_state.messages = []
+            st.session_state.last_audio_id = None
+            st.rerun()
+
+
 def handle_voice_input() -> None:
-    st.markdown("**Ya bolkar likhaiye**")
+    st.markdown("**🎤 बोलकर बताइए**")
     if not HAS_AUDIO_INPUT:
         st.caption("🎤 आवाज़ से लिखने की सुविधा जल्द आएगी। अभी नीचे टाइप करें।")
         return
@@ -218,19 +257,15 @@ def handle_voice_input() -> None:
 
 
 def main() -> None:
+    page_icon = LOGO_PATH if os.path.isfile(LOGO_PATH) else "🩺"
     st.set_page_config(
         page_title="Swasthya AI",
-        page_icon="🩺",
+        page_icon=page_icon,
         layout="centered",
     )
 
     init_session_state()
-
-    st.title("Swasthya AI")
-    st.caption(
-        "हिंदी या Hinglish में बात करें — सरल सुझाव पाएं "
-        "(जैसे: mujhe bukhaar hai aur headache ho raha hai)"
-    )
+    inject_brand_styles()
 
     if not os.getenv("ANTHROPIC_API_KEY"):
         st.error(
@@ -240,15 +275,10 @@ def main() -> None:
         )
         st.stop()
 
-    _, col2 = st.columns([4, 1])
-    with col2:
-        if st.button("नई बातचीत", use_container_width=True):
-            st.session_state.messages = []
-            st.session_state.last_audio_id = None
-            st.rerun()
-
+    render_header()
     render_chat_history()
 
+    st.divider()
     handle_voice_input()
 
     prompt = st.chat_input("अपने लक्षण लिखें...")
