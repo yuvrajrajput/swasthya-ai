@@ -1,5 +1,8 @@
 import io
+import json
 import os
+import re
+from datetime import datetime, timezone
 
 import streamlit as st
 from anthropic import Anthropic
@@ -9,6 +12,7 @@ load_dotenv()
 
 MODEL = "claude-sonnet-4-6"
 LOGO_PATH = "swasthya-ai-icon.svg"
+QUERY_LOGS_PATH = "query_logs.json"
 HAS_AUDIO_INPUT = hasattr(st, "audio_input")
 
 EMERGENCY_KEYWORDS = [
@@ -88,6 +92,51 @@ def detect_emergency(text: str) -> bool:
     return any(keyword in normalized for keyword in EMERGENCY_KEYWORDS)
 
 
+def normalize_query(text: str) -> str:
+    """Lowercase, collapse whitespace; strip email/phone-like patterns."""
+    text = text.strip().lower()
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(
+        r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}",
+        "[email]",
+        text,
+    )
+    text = re.sub(r"\b\d{10}\b", "[phone]", text)
+    text = re.sub(r"\b\+?\d[\d\s-]{8,14}\d\b", "[phone]", text)
+    return text
+
+
+def query_token_count(text: str) -> int:
+    return len(text.split()) if text else 0
+
+
+def log_query_anonymously(user_text: str, was_emergency: bool) -> None:
+    """Append anonymous query metadata only — no responses or PII."""
+    normalized = normalize_query(user_text)
+    entry = {
+        "query": normalized,
+        "length": query_token_count(normalized),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "was_emergency": was_emergency,
+    }
+    logs: list[dict] = []
+    if os.path.isfile(QUERY_LOGS_PATH):
+        try:
+            with open(QUERY_LOGS_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                logs = data
+        except (json.JSONDecodeError, OSError):
+            logs = []
+    logs.append(entry)
+    try:
+        with open(QUERY_LOGS_PATH, "w", encoding="utf-8") as f:
+            json.dump(logs, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+    except OSError:
+        pass
+
+
 def show_emergency_warning() -> None:
     st.markdown(
         f'<div style="background-color:#b91c1c;color:#fff;padding:1rem 1.25rem;'
@@ -156,6 +205,7 @@ def process_user_message(user_text: str, from_voice: bool = False) -> None:
 
     display_text = f"*(आवाज़ से)* {user_text}" if from_voice else user_text
     is_emergency = detect_emergency(user_text)
+    log_query_anonymously(user_text, is_emergency)
 
     if is_emergency:
         show_emergency_warning()
