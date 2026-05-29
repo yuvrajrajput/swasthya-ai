@@ -2,17 +2,25 @@ import io
 import json
 import os
 import re
+import time
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 
 import streamlit as st
-from anthropic import Anthropic
 from dotenv import load_dotenv
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 load_dotenv()
 
 MODEL = "claude-sonnet-4-6"
 LOGO_PATH = "swasthya-ai-icon.svg"
 QUERY_LOGS_PATH = "query_logs.json"
+RESPONSE_CACHE_PATH = "response_cache.json"
+MAX_HISTORY_TURNS = 3
+CACHE_SIMILARITY_THRESHOLD = 0.88
+INPUT_COST_PER_MTOK = 3.0
+OUTPUT_COST_PER_MTOK = 15.0
 HAS_AUDIO_INPUT = hasattr(st, "audio_input")
 
 EMERGENCY_KEYWORDS = [
@@ -73,11 +81,16 @@ SYSTEM_PROMPT = """आप एक सहायक स्वास्थ्य ज
 - दवाओं की खुराक या नुस्खे न बताएं।"""
 
 
-def get_client() -> Anthropic | None:
+@st.cache_resource
+def get_llm() -> ChatAnthropic:
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        return None
-    return Anthropic(api_key=api_key)
+        raise ValueError("API key not configured")
+    return ChatAnthropic(
+        model=MODEL,
+        max_tokens=1024,
+        api_key=api_key,
+    )
 
 
 def init_session_state() -> None:
@@ -110,31 +123,152 @@ def query_token_count(text: str) -> int:
     return len(text.split()) if text else 0
 
 
-def log_query_anonymously(user_text: str, was_emergency: bool) -> None:
-    """Append anonymous query metadata only — no responses or PII."""
+def estimate_cost_usd(input_tokens: int, output_tokens: int) -> float:
+    return (input_tokens / 1_000_000) * INPUT_COST_PER_MTOK + (
+        output_tokens / 1_000_000
+    ) * OUTPUT_COST_PER_MTOK
+
+
+def _load_json_list(path: str) -> list:
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _save_json_list(path: str, items: list) -> None:
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+    except OSError:
+        pass
+
+
+def log_query_metrics(
+    user_text: str,
+    was_emergency: bool,
+    *,
+    latency_ms: int = 0,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cost_usd: float = 0.0,
+    cached: bool = False,
+) -> None:
+    """Anonymous query log — no PII, no assistant response text."""
     normalized = normalize_query(user_text)
     entry = {
         "query": normalized,
         "length": query_token_count(normalized),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "was_emergency": was_emergency,
+        "latency_ms": latency_ms,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": round(cost_usd, 6),
+        "cached": cached,
     }
-    logs: list[dict] = []
-    if os.path.isfile(QUERY_LOGS_PATH):
-        try:
-            with open(QUERY_LOGS_PATH, encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, list):
-                logs = data
-        except (json.JSONDecodeError, OSError):
-            logs = []
+    logs = _load_json_list(QUERY_LOGS_PATH)
     logs.append(entry)
-    try:
-        with open(QUERY_LOGS_PATH, "w", encoding="utf-8") as f:
-            json.dump(logs, f, ensure_ascii=False, indent=2)
-            f.write("\n")
-    except OSError:
-        pass
+    _save_json_list(QUERY_LOGS_PATH, logs)
+
+
+def load_response_cache() -> list[dict]:
+    return _load_json_list(RESPONSE_CACHE_PATH)
+
+
+def save_to_response_cache(normalized_query: str, response: str) -> None:
+    cache = load_response_cache()
+    cache = [e for e in cache if e.get("query") != normalized_query]
+    cache.append(
+        {
+            "query": normalized_query,
+            "response": response,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    if len(cache) > 500:
+        cache = cache[-500:]
+    _save_json_list(RESPONSE_CACHE_PATH, cache)
+
+
+def find_cached_response(normalized_query: str) -> str | None:
+    """Semantic-lite cache: exact match, then high similarity on normalized text."""
+    for entry in load_response_cache():
+        if entry.get("query") == normalized_query:
+            return str(entry.get("response", ""))
+    best_ratio = 0.0
+    best_response: str | None = None
+    for entry in load_response_cache():
+        cached_q = str(entry.get("query", ""))
+        ratio = SequenceMatcher(None, normalized_query, cached_q).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_response = str(entry.get("response", ""))
+    if best_ratio >= CACHE_SIMILARITY_THRESHOLD and best_response:
+        return best_response
+    return None
+
+
+def build_langchain_messages(
+    history: list[dict[str, str | bool]],
+) -> list[SystemMessage | HumanMessage | AIMessage]:
+    """Last N user/assistant turns only — reduces tokens (LangChain messages)."""
+    messages: list[SystemMessage | HumanMessage | AIMessage] = [
+        SystemMessage(content=SYSTEM_PROMPT)
+    ]
+    chat_msgs = [m for m in history if m["role"] in ("user", "assistant")]
+    for msg in chat_msgs[-(MAX_HISTORY_TURNS * 2) :]:
+        if msg["role"] == "user":
+            messages.append(HumanMessage(content=str(msg["content"])))
+        else:
+            messages.append(AIMessage(content=str(msg["content"])))
+    return messages
+
+
+def ask_claude(history: list[dict[str, str | bool]]) -> tuple[str, dict]:
+    """LangChain ChatAnthropic invoke; returns (text, metrics)."""
+    llm = get_llm()
+    lc_messages = build_langchain_messages(history)
+
+    start = time.perf_counter()
+    ai_message = llm.invoke(lc_messages)
+    latency_ms = int((time.perf_counter() - start) * 1000)
+
+    raw_content = ai_message.content
+    if isinstance(raw_content, str):
+        text = raw_content
+    elif isinstance(raw_content, list):
+        parts = []
+        for block in raw_content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+            elif isinstance(block, str):
+                parts.append(block)
+        text = "".join(parts) or str(raw_content)
+    else:
+        text = str(raw_content)
+
+    usage = getattr(ai_message, "usage_metadata", None) or {}
+    if not usage.get("input_tokens"):
+        meta = getattr(ai_message, "response_metadata", None) or {}
+        usage = meta.get("usage", usage) or usage
+    input_tokens = int(usage.get("input_tokens", 0) or 0)
+    output_tokens = int(usage.get("output_tokens", 0) or 0)
+    cost_usd = estimate_cost_usd(input_tokens, output_tokens)
+
+    metrics = {
+        "latency_ms": latency_ms,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": cost_usd,
+        "cached": False,
+    }
+    return text, metrics
 
 
 def show_emergency_warning() -> None:
@@ -144,26 +278,6 @@ def show_emergency_warning() -> None:
         f"{EMERGENCY_WARNING_HTML}</div>",
         unsafe_allow_html=True,
     )
-
-
-def ask_claude(history: list[dict[str, str | bool]]) -> str:
-    client = get_client()
-    if client is None:
-        raise ValueError("API key not configured")
-
-    api_messages = [
-        {"role": m["role"], "content": str(m["content"])}
-        for m in history
-        if m["role"] in ("user", "assistant")
-    ]
-
-    message = client.messages.create(
-        model=MODEL,
-        max_tokens=1024,
-        system=SYSTEM_PROMPT,
-        messages=api_messages,
-    )
-    return message.content[0].text
 
 
 def transcribe_audio(audio_bytes: bytes) -> str | None:
@@ -198,6 +312,10 @@ def render_chat_history() -> None:
                 show_emergency_warning()
 
 
+def count_user_turns(history: list[dict]) -> int:
+    return sum(1 for m in history if m["role"] == "user")
+
+
 def process_user_message(user_text: str, from_voice: bool = False) -> None:
     user_text = user_text.strip()
     if not user_text:
@@ -205,7 +323,7 @@ def process_user_message(user_text: str, from_voice: bool = False) -> None:
 
     display_text = f"*(आवाज़ से)* {user_text}" if from_voice else user_text
     is_emergency = detect_emergency(user_text)
-    log_query_anonymously(user_text, is_emergency)
+    normalized = normalize_query(user_text)
 
     if is_emergency:
         show_emergency_warning()
@@ -219,11 +337,42 @@ def process_user_message(user_text: str, from_voice: bool = False) -> None:
         }
     )
 
+    # Cache only for non-emergency, first symptom-style turn (not multi-turn follow-ups)
+    use_cache = not is_emergency and count_user_turns(st.session_state.messages) <= 1
+    if use_cache:
+        cached_response = find_cached_response(normalized)
+        if cached_response:
+            st.session_state.messages.append(
+                {"role": "assistant", "content": cached_response, "emergency": False}
+            )
+            log_query_metrics(
+                user_text,
+                is_emergency,
+                latency_ms=0,
+                input_tokens=0,
+                output_tokens=0,
+                cost_usd=0.0,
+                cached=True,
+            )
+            st.rerun()
+            return
+
     with st.spinner("विचार किया जा रहा है..."):
         try:
-            response = ask_claude(st.session_state.messages)
+            response, metrics = ask_claude(st.session_state.messages)
             st.session_state.messages.append(
                 {"role": "assistant", "content": response, "emergency": False}
+            )
+            if use_cache:
+                save_to_response_cache(normalized, response)
+            log_query_metrics(
+                user_text,
+                is_emergency,
+                latency_ms=metrics["latency_ms"],
+                input_tokens=metrics["input_tokens"],
+                output_tokens=metrics["output_tokens"],
+                cost_usd=metrics["cost_usd"],
+                cached=False,
             )
         except Exception as e:
             st.session_state.messages.append(
@@ -233,6 +382,7 @@ def process_user_message(user_text: str, from_voice: bool = False) -> None:
                     "emergency": False,
                 }
             )
+            log_query_metrics(user_text, is_emergency, cached=False)
 
     st.rerun()
 

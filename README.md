@@ -61,4 +61,5 @@ Your app URL will look like: `https://swasthya-ai-xxxxx.streamlit.app`
 - Multi-turn chat with `st.session_state` history sent to Claude each turn.
 - Emergency keywords (e.g. chest pain, seene mein dard, behoshi) trigger an immediate Hindi alert to call **112** before Claude responds.
 - Voice: `st.audio_input` (WebM from browser) → pydub/FFmpeg → WAV → Google speech recognition (Hindi); falls back to a “coming soon” note on older Streamlit.
+- **Milestone 2:** LangChain `ChatAnthropic`, last 3 chat turns only, semantic-style response cache (`response_cache.json`), rich query logs (latency, tokens, cost, cached).
 - This app provides general information only, not medical diagnosis.
