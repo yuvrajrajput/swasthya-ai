@@ -16,8 +16,19 @@ A Streamlit health assistant for India. Users describe symptoms in **Hindi or Hi
 | **Logging** | Supabase `query_logs` — latency, tokens, cost, `cached` flag (optional) |
 | **Cache storage** | Supabase `response_cache` with RLS policies (`supabase_setup.sql`) |
 | **Emergency routing** | Hindi/English keywords → **112** alert before Claude |
-| **Voice** | `streamlit-mic-recorder` → Google Speech (`hi-IN`); mic above chat input; best on **Chrome Android** |
+| **Voice** | `streamlit-mic-recorder` → **Google STT** (`hi-IN`, server-side). **Not** browser Web Speech API. Best on **Chrome Android**. |
 | **i18n** | Hindi system prompt; accepts Hinglish input |
+
+## Milestone 3 progress
+
+| # | Task | Status |
+|---|------|--------|
+| 1 | Voice (`streamlit-mic-recorder` + Google STT) | **Done** |
+| 2 | Supabase RLS (tables + policies) | Run `supabase_setup.sql` in dashboard → verify below |
+| 3 | README accurate | **Done** |
+| 4 | Latest code on `main` | **Done** |
+| 5 | 50 users + Google Form feedback | **You** (marketing — not code) |
+| 6 | Top 10 symptoms from `query_logs` | After traffic — SQL in `supabase_setup.sql` |
 
 ## Project files
 
@@ -26,7 +37,7 @@ A Streamlit health assistant for India. Users describe symptoms in **Hindi or Hi
 | `app.py` | Streamlit chat app |
 | `index.html` | Marketing / waitlist landing |
 | `requirements.txt` | Python dependencies |
-| `supabase_setup.sql` | RLS policies (run after creating tables) |
+| `supabase_setup.sql` | Tables + RLS policies (run once in SQL Editor) |
 | `.env.example` | Local env template |
 | `.streamlit/config.toml` | Saffron/cream theme |
 
@@ -62,10 +73,14 @@ First run downloads the embedding model (~100MB) for semantic cache — one-time
 ## Supabase setup
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. In **SQL Editor**, create tables (`query_logs`, `response_cache`) — see project history or your saved SQL.
-3. Run all SQL from **`supabase_setup.sql`** (RLS + insert/select policies).
-4. In **Settings → API**, copy **Project URL** and **Publishable** key (not the secret key).
+2. **SQL Editor** → paste and run **`supabase_setup.sql`** (creates tables + enables RLS + policies).
+3. **Verify RLS:** Table Editor → `query_logs` / `response_cache` → **RLS enabled** (shield icon).  
+   Or run: `select tablename, rowsecurity from pg_tables where tablename in ('query_logs','response_cache');`  
+   Both must show `rowsecurity = true`.
+4. **Settings → API** → copy **Project URL** + **Publishable** key (not secret key).
 5. Add to `.env` and Streamlit Cloud Secrets (see below).
+
+**Security:** With RLS on, the public (anon) key can log queries (insert) and use the cache — but **cannot** read all `query_logs` from the browser. Only you see full logs in the Supabase dashboard.
 
 ## Deploy on Streamlit Cloud
 
@@ -90,11 +105,14 @@ SUPABASE_KEY = "sb_publishable_your-key-here"
 
 ## Voice (how it works)
 
-1. Tap **🎤 बोलें** → speak in Hindi/Hinglish → tap **⏹ रोकें**.
-2. Audio is transcribed server-side (`SpeechRecognition` + Google, language `hi-IN`).
-3. Text is sent to chat as `*(आवाज़ से)* …` and Claude replies (streamed).
+**Stack:** `streamlit-mic-recorder` records audio → Python `SpeechRecognition` → **Google Speech-to-Text** (`hi-IN`).  
+This is **not** the browser Web Speech API (that approach was removed — it failed on mobile).
 
-If voice fails, type symptoms in the box at the bottom.
+1. Tap **🎤 बोलें** → speak in Hindi/Hinglish → tap **⏹ रोकें**.
+2. Wait a few seconds for transcription (needs **internet**).
+3. Text appears in chat as `*(आवाज़ से)* …` and Claude replies (streamed).
+
+If voice fails, type symptoms in the box at the bottom. Use **Chrome** on Android for best results.
 
 ## Architecture notes
 
