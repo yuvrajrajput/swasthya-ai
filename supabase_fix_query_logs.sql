@@ -1,4 +1,5 @@
--- Run this if query_logs stays EMPTY but response_cache has rows
+-- Run this if query_logs stays EMPTY or RLS error 42501 on insert
+-- App uses INSERT only (no public SELECT on query_logs) — fix is in app.py returning="minimal"
 -- Supabase → SQL Editor → paste → Run
 
 -- 1) Add any missing columns (safe if table was created earlier)

@@ -186,7 +186,8 @@ def log_query_metrics(
         "cached": cached,
     }
     try:
-        sb.table("query_logs").insert(row).execute()
+        # returning="minimal" — no SELECT after INSERT (query_logs has no public SELECT policy)
+        sb.table("query_logs").insert(row, returning="minimal").execute()
         st.session_state.pop("_last_log_error", None)
     except Exception as e:
         st.session_state["_last_log_error"] = str(e)
@@ -196,7 +197,8 @@ def log_query_metrics(
                     "query": normalized,
                     "length": length,
                     "was_emergency": was_emergency,
-                }
+                },
+                returning="minimal",
             ).execute()
             st.session_state.pop("_last_log_error", None)
         except Exception as e2:

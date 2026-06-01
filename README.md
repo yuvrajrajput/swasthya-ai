@@ -85,8 +85,10 @@ First run downloads the embedding model (~100MB) for semantic cache — one-time
 
 **Security:** With RLS on, the public (anon) key can log queries (insert) and use the cache — but **cannot** read all `query_logs` from the browser. Only you see full logs in the Supabase dashboard.
 
-**Troubleshooting `query_logs` empty / `Invalid API key` (401):**  
-Streamlit Secrets → fix `SUPABASE_KEY` (use **anon `eyJ...`** from API → Legacy keys, or correct **publishable** key). **Reboot** app. Yellow warning at bottom of app shows the exact error until fixed.
+**Troubleshooting `query_logs`:**  
+- **401 Invalid API key** → fix `SUPABASE_KEY` (anon `eyJ...` or publishable; not secret).  
+- **42501 RLS policy** → app uses `insert(..., returning="minimal")` so logs work without public SELECT. Update `app.py` on `main` and **Reboot**.  
+Yellow warning at bottom of app shows errors until fixed.
 
 ## Deploy on Streamlit Cloud
 
