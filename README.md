@@ -29,6 +29,17 @@ ANTHROPIC_API_KEY=sk-ant-...
 streamlit run app.py
 ```
 
+## Supabase Setup
+
+1. Create a Supabase project at https://supabase.com
+2. Run the SQL from `supabase_setup.sql` in SQL Editor
+3. Add to `.env` and Streamlit Cloud Secrets:
+   SUPABASE_URL = "https://xxxx.supabase.co"
+   SUPABASE_KEY = "your-anon-key"
+
+Note: App works without Supabase — 
+logging and cache silently disabled.
+
 ## Deploy on Streamlit Cloud
 
 1. Merge latest code to `main` on GitHub: [yuvrajrajput/swasthya-ai](https://github.com/yuvrajrajput/swasthya-ai)
