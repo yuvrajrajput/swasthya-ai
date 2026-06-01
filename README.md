@@ -77,10 +77,16 @@ First run downloads the embedding model (~100MB) for semantic cache — one-time
 3. **Verify RLS:** Table Editor → `query_logs` / `response_cache` → **RLS enabled** (shield icon).  
    Or run: `select tablename, rowsecurity from pg_tables where tablename in ('query_logs','response_cache');`  
    Both must show `rowsecurity = true`.
-4. **Settings → API** → copy **Project URL** + **Publishable** key (not secret key).
-5. Add to `.env` and Streamlit Cloud Secrets (see below).
+4. **Settings → API** → copy **Project URL** + API key:
+   - **Preferred for Python app:** legacy **`anon`** key (`eyJ...` long JWT), **or**
+   - **Publishable** key (`sb_publishable_...`) if your project shows it
+   - **Never** use **secret** key (`sb_secret_...`) in the app — 401 error
+5. Add to `.env` and Streamlit Cloud Secrets (see below). No extra spaces or quotes inside the key.
 
 **Security:** With RLS on, the public (anon) key can log queries (insert) and use the cache — but **cannot** read all `query_logs` from the browser. Only you see full logs in the Supabase dashboard.
+
+**Troubleshooting `query_logs` empty / `Invalid API key` (401):**  
+Streamlit Secrets → fix `SUPABASE_KEY` (use **anon `eyJ...`** from API → Legacy keys, or correct **publishable** key). **Reboot** app. Yellow warning at bottom of app shows the exact error until fixed.
 
 ## Deploy on Streamlit Cloud
 
