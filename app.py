@@ -1,27 +1,26 @@
-import io
-import json
 import os
 import re
 import time
+from collections.abc import Iterator
 from datetime import datetime, timezone
-from difflib import SequenceMatcher
 
+import numpy as np
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from sentence_transformers import SentenceTransformer
+from streamlit_mic_recorder import speech_to_text
+from supabase import create_client
 
 load_dotenv()
 
 MODEL = "claude-sonnet-4-6"
 LOGO_PATH = "swasthya-ai-icon.svg"
-QUERY_LOGS_PATH = "query_logs.json"
-RESPONSE_CACHE_PATH = "response_cache.json"
 MAX_HISTORY_TURNS = 3
 CACHE_SIMILARITY_THRESHOLD = 0.88
 INPUT_COST_PER_MTOK = 3.0
 OUTPUT_COST_PER_MTOK = 15.0
-HAS_AUDIO_INPUT = hasattr(st, "audio_input")
 
 EMERGENCY_KEYWORDS = [
     "chest pain",
@@ -93,11 +92,35 @@ def get_llm() -> ChatAnthropic:
     )
 
 
+@st.cache_resource(show_spinner="Model load ho raha hai...")
+def get_embedder():
+    return SentenceTransformer(
+        'paraphrase-multilingual-MiniLM-L12-v2'
+    )
+
+
+def _env_or_secret(name: str) -> str | None:
+    val = os.getenv(name)
+    if val:
+        return val
+    try:
+        return str(st.secrets[name])
+    except Exception:
+        return None
+
+
+@st.cache_resource
+def get_supabase():
+    url = _env_or_secret("SUPABASE_URL")
+    key = _env_or_secret("SUPABASE_KEY")
+    if not url or not key:
+        return None
+    return create_client(url, key)
+
+
 def init_session_state() -> None:
     if "messages" not in st.session_state:
         st.session_state.messages: list[dict[str, str | bool]] = []
-    if "last_audio_id" not in st.session_state:
-        st.session_state.last_audio_id = None
 
 
 def detect_emergency(text: str) -> bool:
@@ -129,24 +152,9 @@ def estimate_cost_usd(input_tokens: int, output_tokens: int) -> float:
     ) * OUTPUT_COST_PER_MTOK
 
 
-def _load_json_list(path: str) -> list:
-    if not os.path.isfile(path):
-        return []
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, OSError):
-        return []
-
-
-def _save_json_list(path: str, items: list) -> None:
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(items, f, ensure_ascii=False, indent=2)
-            f.write("\n")
-    except OSError:
-        pass
+def get_embedding(text: str) -> np.ndarray:
+    model = get_embedder()
+    return model.encode(text, normalize_embeddings=True)
 
 
 def log_query_metrics(
@@ -161,56 +169,86 @@ def log_query_metrics(
 ) -> None:
     """Anonymous query log — no PII, no assistant response text."""
     normalized = normalize_query(user_text)
-    entry = {
-        "query": normalized,
-        "length": query_token_count(normalized),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "was_emergency": was_emergency,
-        "latency_ms": latency_ms,
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "cost_usd": round(cost_usd, 6),
-        "cached": cached,
-    }
-    logs = _load_json_list(QUERY_LOGS_PATH)
-    logs.append(entry)
-    _save_json_list(QUERY_LOGS_PATH, logs)
+    length = query_token_count(normalized)
+    sb = get_supabase()
+    if sb is None:
+        return
+    try:
+        sb.table("query_logs").insert(
+            {
+                "query": normalized,
+                "length": length,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "was_emergency": was_emergency,
+                "latency_ms": latency_ms,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cost_usd": round(cost_usd, 6),
+                "cached": cached,
+            }
+        ).execute()
+    except Exception:
+        pass
 
 
 def load_response_cache() -> list[dict]:
-    return _load_json_list(RESPONSE_CACHE_PATH)
+    sb = get_supabase()
+    if sb is None:
+        return []
+    try:
+        result = (
+            sb.table("response_cache")
+            .select("query,response,timestamp")
+            .execute()
+        )
+        return result.data or []
+    except Exception:
+        return []
 
 
 def save_to_response_cache(normalized_query: str, response: str) -> None:
-    cache = load_response_cache()
-    cache = [e for e in cache if e.get("query") != normalized_query]
-    cache.append(
-        {
-            "query": normalized_query,
-            "response": response,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-    )
-    if len(cache) > 500:
-        cache = cache[-500:]
-    _save_json_list(RESPONSE_CACHE_PATH, cache)
+    sb = get_supabase()
+    if sb is None:
+        return
+    try:
+        sb.table("response_cache").upsert(
+            {
+                "query": normalized_query,
+                "response": response,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            on_conflict="query",
+        ).execute()
+    except Exception:
+        pass
 
 
 def find_cached_response(normalized_query: str) -> str | None:
-    """Semantic-lite cache: exact match, then high similarity on normalized text."""
-    for entry in load_response_cache():
-        if entry.get("query") == normalized_query:
-            return str(entry.get("response", ""))
-    best_ratio = 0.0
+    cache = load_response_cache()
+    if not cache:
+        return None
+
+    query_embedding = get_embedding(normalized_query)
+
+    best_score = 0.0
     best_response: str | None = None
-    for entry in load_response_cache():
+
+    for entry in cache:
         cached_q = str(entry.get("query", ""))
-        ratio = SequenceMatcher(None, normalized_query, cached_q).ratio()
-        if ratio > best_ratio:
-            best_ratio = ratio
+
+        if cached_q == normalized_query:
+            return str(entry.get("response", ""))
+
+        cached_embedding = get_embedding(cached_q)
+        score = float(np.dot(query_embedding, cached_embedding))
+
+        if score > best_score:
+            best_score = score
             best_response = str(entry.get("response", ""))
-    if best_ratio >= CACHE_SIMILARITY_THRESHOLD and best_response:
+
+    if best_score >= CACHE_SIMILARITY_THRESHOLD and best_response:
         return best_response
+
     return None
 
 
@@ -230,45 +268,66 @@ def build_langchain_messages(
     return messages
 
 
-def ask_claude(history: list[dict[str, str | bool]]) -> tuple[str, dict]:
-    """LangChain ChatAnthropic invoke; returns (text, metrics)."""
-    llm = get_llm()
-    lc_messages = build_langchain_messages(history)
-
-    start = time.perf_counter()
-    ai_message = llm.invoke(lc_messages)
-    latency_ms = int((time.perf_counter() - start) * 1000)
-
-    raw_content = ai_message.content
-    if isinstance(raw_content, str):
-        text = raw_content
-    elif isinstance(raw_content, list):
+def _chunk_text(chunk) -> str:
+    if not hasattr(chunk, "content"):
+        return ""
+    content = chunk.content
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
         parts = []
-        for block in raw_content:
-            if isinstance(block, dict) and block.get("type") == "text":
+        for block in content:
+            if isinstance(block, dict):
                 parts.append(str(block.get("text", "")))
             elif isinstance(block, str):
                 parts.append(block)
-        text = "".join(parts) or str(raw_content)
-    else:
-        text = str(raw_content)
+        return "".join(parts)
+    return str(content) if content else ""
 
-    usage = getattr(ai_message, "usage_metadata", None) or {}
+
+def _usage_from_chunk(chunk) -> tuple[int, int]:
+    usage = getattr(chunk, "usage_metadata", None) or {}
     if not usage.get("input_tokens"):
-        meta = getattr(ai_message, "response_metadata", None) or {}
+        meta = getattr(chunk, "response_metadata", None) or {}
         usage = meta.get("usage", usage) or usage
-    input_tokens = int(usage.get("input_tokens", 0) or 0)
-    output_tokens = int(usage.get("output_tokens", 0) or 0)
+    return (
+        int(usage.get("input_tokens", 0) or 0),
+        int(usage.get("output_tokens", 0) or 0),
+    )
+
+
+def stream_claude(history: list[dict[str, str | bool]]) -> Iterator[str]:
+    llm = get_llm()
+    lc_messages = build_langchain_messages(history)
+    start = time.perf_counter()
+
+    full_text = ""
+    input_tokens = 0
+    output_tokens = 0
+
+    for chunk in llm.stream(lc_messages):
+        text = _chunk_text(chunk)
+        if text:
+            full_text += text
+            yield text
+
+        inp, out = _usage_from_chunk(chunk)
+        if inp:
+            input_tokens = inp
+        if out:
+            output_tokens = out
+
+    latency_ms = int((time.perf_counter() - start) * 1000)
     cost_usd = estimate_cost_usd(input_tokens, output_tokens)
 
-    metrics = {
+    stream_claude.last_result = {
+        "full_text": full_text,
         "latency_ms": latency_ms,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "cost_usd": cost_usd,
         "cached": False,
     }
-    return text, metrics
 
 
 def show_emergency_warning() -> None:
@@ -278,30 +337,6 @@ def show_emergency_warning() -> None:
         f"{EMERGENCY_WARNING_HTML}</div>",
         unsafe_allow_html=True,
     )
-
-
-def transcribe_audio(audio_bytes: bytes) -> str | None:
-    try:
-        import speech_recognition as sr
-    except ImportError:
-        return None
-
-    recognizer = sr.Recognizer()
-    try:
-        from pydub import AudioSegment
-
-        audio_segment = AudioSegment.from_file(
-            io.BytesIO(audio_bytes), format="webm"
-        )
-        wav_buffer = io.BytesIO()
-        audio_segment.export(wav_buffer, format="wav")
-        wav_buffer.seek(0)
-
-        with sr.AudioFile(wav_buffer) as source:
-            audio = recognizer.record(source)
-        return recognizer.recognize_google(audio, language="hi-IN")
-    except Exception:
-        return None
 
 
 def render_chat_history() -> None:
@@ -337,7 +372,6 @@ def process_user_message(user_text: str, from_voice: bool = False) -> None:
         }
     )
 
-    # Cache only for non-emergency, first symptom-style turn (not multi-turn follow-ups)
     use_cache = not is_emergency and count_user_turns(st.session_state.messages) <= 1
     if use_cache:
         cached_response = find_cached_response(normalized)
@@ -357,32 +391,37 @@ def process_user_message(user_text: str, from_voice: bool = False) -> None:
             st.rerun()
             return
 
-    with st.spinner("विचार किया जा रहा है..."):
-        try:
-            response, metrics = ask_claude(st.session_state.messages)
-            st.session_state.messages.append(
-                {"role": "assistant", "content": response, "emergency": False}
-            )
-            if use_cache:
-                save_to_response_cache(normalized, response)
-            log_query_metrics(
-                user_text,
-                is_emergency,
-                latency_ms=metrics["latency_ms"],
-                input_tokens=metrics["input_tokens"],
-                output_tokens=metrics["output_tokens"],
-                cost_usd=metrics["cost_usd"],
-                cached=False,
-            )
-        except Exception as e:
-            st.session_state.messages.append(
-                {
-                    "role": "assistant",
-                    "content": f"कुछ गलत हो गया। बाद में पुनः प्रयास करें। ({e})",
-                    "emergency": False,
-                }
-            )
-            log_query_metrics(user_text, is_emergency, cached=False)
+    try:
+        with st.chat_message("assistant"):
+            response = st.write_stream(stream_claude(st.session_state.messages))
+
+        metrics = getattr(stream_claude, "last_result", None) or {}
+        if not response:
+            response = metrics.get("full_text", "")
+
+        st.session_state.messages.append(
+            {"role": "assistant", "content": response, "emergency": False}
+        )
+        if use_cache:
+            save_to_response_cache(normalized, response)
+        log_query_metrics(
+            user_text,
+            is_emergency,
+            latency_ms=metrics.get("latency_ms", 0),
+            input_tokens=metrics.get("input_tokens", 0),
+            output_tokens=metrics.get("output_tokens", 0),
+            cost_usd=metrics.get("cost_usd", 0.0),
+            cached=False,
+        )
+    except Exception as e:
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": f"कुछ गलत हो गया। बाद में पुनः प्रयास करें। ({e})",
+                "emergency": False,
+            }
+        )
+        log_query_metrics(user_text, is_emergency, cached=False)
 
     st.rerun()
 
@@ -398,6 +437,21 @@ def inject_brand_styles() -> None:
           [data-testid="stChatMessage"] h3 {
             font-size: 1.05rem !important;
             margin-top: 0.4rem;
+          }
+          /* Style voice button to look clean */
+          .stAudio, [data-testid="stAudio"] {
+            display: none !important;
+          }
+          /* Style mic recorder button */
+          div[data-testid="stMarkdownContainer"] + div
+            button[kind="secondary"] {
+            background: #FF6B2B !important;
+            color: white !important;
+            border-radius: 999px !important;
+            border: none !important;
+            padding: 0.5rem 1.5rem !important;
+            font-size: 0.9rem !important;
+            width: 100% !important;
           }
         </style>
         """,
@@ -421,65 +475,52 @@ def render_header() -> None:
     with col_btn:
         if st.button("नई बातचीत", use_container_width=True):
             st.session_state.messages = []
-            st.session_state.last_audio_id = None
             st.rerun()
 
 
 def handle_voice_input() -> None:
-    st.markdown("**🎤 बोलकर बताइए**")
-    if not HAS_AUDIO_INPUT:
-        st.caption("🎤 आवाज़ से लिखने की सुविधा जल्द आएगी। अभी नीचे टाइप करें।")
-        return
+    st.markdown("🎤 **Ya bolkar likhiye**")
 
-    audio = st.audio_input(
-        "माइक्रोफ़ोन दबाएं और बोलें",
-        key="voice_input",
+    transcript = speech_to_text(
+        language="hi",
+        start_prompt="🎤 Tap karein aur bolein",
+        stop_prompt="⏹ Ruk jaiye",
+        just_once=True,
+        use_container_width=True,
+        key="voice_stt",
     )
-    if audio is None:
-        return
-
-    audio_bytes = audio.getvalue()
-    audio_id = hash(audio_bytes)
-    if st.session_state.last_audio_id == audio_id:
-        return
-
-    st.session_state.last_audio_id = audio_id
-    with st.spinner("आवाज़ समझी जा रही है..."):
-        transcript = transcribe_audio(audio_bytes)
 
     if transcript:
         process_user_message(transcript, from_voice=True)
-    else:
-        st.warning(
-            "आवाज़ समझ नहीं आई। कृपया फिर बोलें या नीचे टाइप करें। "
-            "(स्पष्ट हिंदी/हिंग्लिश में बोलें)"
-        )
 
 
 def main() -> None:
-    page_icon = LOGO_PATH if os.path.isfile(LOGO_PATH) else "🩺"
     st.set_page_config(
         page_title="Swasthya AI",
-        page_icon=page_icon,
+        page_icon="🩺",
         layout="centered",
     )
 
     init_session_state()
     inject_brand_styles()
+    render_header()
 
     if not os.getenv("ANTHROPIC_API_KEY"):
         st.error(
             "Claude API key सेट नहीं है। "
-            "**Streamlit Cloud:** Settings → Secrets → `ANTHROPIC_API_KEY = \"sk-ant-...\"` → Reboot. "
-            "**Local:** `.env` में `ANTHROPIC_API_KEY` जोड़ें (`.env.example` देखें)।"
+            "`.env` में `ANTHROPIC_API_KEY` जोड़ें।"
         )
         st.stop()
 
-    render_header()
-    render_chat_history()
+    voice_zone = st.container()
+    with voice_zone:
+        handle_voice_input()
 
     st.divider()
-    handle_voice_input()
+
+    chat_zone = st.container()
+    with chat_zone:
+        render_chat_history()
 
     prompt = st.chat_input("अपने लक्षण लिखें...")
     if prompt:
@@ -487,8 +528,8 @@ def main() -> None:
 
     st.divider()
     st.caption(
-        "⚠️ यह ऐप चिकित्सा निदान नहीं देता। गंभीर या लंबे समय से चल रहे "
-        "लक्षणों के लिए हमेशा योग्य डॉक्टर से परामर्श लें।"
+        "⚠️ यह ऐप चिकित्सा निदान नहीं देता। "
+        "गंभीर लक्षणों के लिए डॉक्टर से मिलें।"
     )
 
 
