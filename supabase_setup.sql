@@ -32,26 +32,39 @@ drop policy if exists "insert_select_response_cache" on response_cache;
 drop policy if exists "insert_only_response_cache" on response_cache;
 drop policy if exists "update_only_response_cache" on response_cache;
 
+-- API role must be explicit (fixes empty query_logs on some projects)
+grant usage on schema public to anon, authenticated;
+grant insert on table public.query_logs to anon, authenticated;
+grant select, insert, update on table public.response_cache to anon, authenticated;
+
 -- query_logs: anon key can INSERT only (app logging). No public read.
 create policy "insert_only_query_logs"
-on query_logs
+on public.query_logs
+as permissive
 for insert
+to anon, authenticated
 with check (true);
 
 -- response_cache: app needs SELECT (cache hit) + INSERT + UPDATE (upsert)
 create policy "insert_select_response_cache"
-on response_cache
+on public.response_cache
+as permissive
 for select
+to anon, authenticated
 using (true);
 
 create policy "insert_only_response_cache"
-on response_cache
+on public.response_cache
+as permissive
 for insert
+to anon, authenticated
 with check (true);
 
 create policy "update_only_response_cache"
-on response_cache
+on public.response_cache
+as permissive
 for update
+to anon, authenticated
 using (true);
 
 -- No DELETE policy on either table (anon cannot delete)

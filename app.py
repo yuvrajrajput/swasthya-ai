@@ -173,23 +173,34 @@ def log_query_metrics(
     length = query_token_count(normalized)
     sb = get_supabase()
     if sb is None:
+        st.session_state["_last_log_error"] = "Supabase URL/KEY missing in Secrets or .env"
         return
+    row = {
+        "query": normalized,
+        "length": length,
+        "was_emergency": was_emergency,
+        "latency_ms": latency_ms,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": round(cost_usd, 6),
+        "cached": cached,
+    }
     try:
-        sb.table("query_logs").insert(
-            {
-                "query": normalized,
-                "length": length,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "was_emergency": was_emergency,
-                "latency_ms": latency_ms,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "cost_usd": round(cost_usd, 6),
-                "cached": cached,
-            }
-        ).execute()
-    except Exception:
-        pass
+        sb.table("query_logs").insert(row).execute()
+        st.session_state.pop("_last_log_error", None)
+    except Exception as e:
+        st.session_state["_last_log_error"] = str(e)
+        try:
+            sb.table("query_logs").insert(
+                {
+                    "query": normalized,
+                    "length": length,
+                    "was_emergency": was_emergency,
+                }
+            ).execute()
+            st.session_state.pop("_last_log_error", None)
+        except Exception as e2:
+            st.session_state["_last_log_error"] = str(e2)
 
 
 def load_response_cache() -> list[dict]:
@@ -581,6 +592,9 @@ def main() -> None:
     st.caption(
         "⚠️ यह ऐप चिकित्सा निदान नहीं देता। गंभीर लक्षणों के लिए डॉक्टर से मिलें।"
     )
+    log_err = st.session_state.get("_last_log_error")
+    if log_err:
+        st.warning(f"Query log (Supabase): {log_err}")
 
 
 if __name__ == "__main__":
