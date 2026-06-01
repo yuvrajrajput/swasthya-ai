@@ -1,76 +1,108 @@
 # Swasthya AI
 
-A Streamlit chat app where users describe health symptoms in Hindi or Hinglish and receive friendly Hindi replies from Claude. Supports multi-turn chat, emergency keyword alerts, and optional voice input.
+A Streamlit health assistant for India. Users describe symptoms in **Hindi or Hinglish** and get friendly **Hindi** replies from Claude. Built for phones and low-bandwidth users (village to city).
 
-## Setup
+**Live app:** [swasthya-ai.streamlit.app](https://swasthya-ai.streamlit.app)  
+**Landing page:** `index.html` (GitHub Pages or static host)
+
+## Features (Milestone 2)
+
+| Feature | Details |
+|--------|---------|
+| **Claude** | `claude-sonnet-4-6` via LangChain `ChatAnthropic` |
+| **Streaming** | Responses stream token-by-token (`st.write_stream`) |
+| **Memory** | Last **3** user/assistant turns sent per request (token savings) |
+| **Semantic cache** | `sentence-transformers` cosine similarity (≥ 0.88); first turn only; never for emergencies |
+| **Logging** | Supabase `query_logs` — latency, tokens, cost, `cached` flag (optional) |
+| **Cache storage** | Supabase `response_cache` with RLS policies (`supabase_setup.sql`) |
+| **Emergency routing** | Hindi/English keywords → **112** alert before Claude |
+| **Voice** | `streamlit-mic-recorder` → Google Speech (`hi-IN`); mic above chat input; best on **Chrome Android** |
+| **i18n** | Hindi system prompt; accepts Hinglish input |
+
+## Project files
+
+| File | Purpose |
+|------|---------|
+| `app.py` | Streamlit chat app |
+| `index.html` | Marketing / waitlist landing |
+| `requirements.txt` | Python dependencies |
+| `supabase_setup.sql` | RLS policies (run after creating tables) |
+| `.env.example` | Local env template |
+| `.streamlit/config.toml` | Saffron/cream theme |
+
+## Setup (local)
 
 1. Create a virtual environment and install dependencies:
 
 ```bash
 python -m venv venv
-venv\Scripts\activate
+venv\Scripts\activate    # Windows
+# source venv/bin/activate   # Mac/Linux
 pip install -r requirements.txt
 ```
 
-2. ffmpeg is required for voice input. Install it:
-   - Windows: `winget install ffmpeg`
-   - Mac: `brew install ffmpeg`
-   - Linux: `sudo apt install ffmpeg`
-
-3. Copy `.env.example` to `.env` and add your [Anthropic API key](https://console.anthropic.com/):
+2. Copy `.env.example` to `.env` and fill in:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_KEY=sb_publishable_...
 ```
 
-4. Run the app:
+`SUPABASE_*` is optional — without it, logging and cache are skipped (app still works).
+
+3. Run the app:
 
 ```bash
-streamlit run app.py
+python -m streamlit run app.py
 ```
 
-## Supabase Setup
+First run downloads the embedding model (~100MB) for semantic cache — one-time.
 
-1. Create a Supabase project at https://supabase.com
-2. Run the SQL from `supabase_setup.sql` in SQL Editor
-3. Add to `.env` and Streamlit Cloud Secrets:
-   SUPABASE_URL = "https://xxxx.supabase.co"
-   SUPABASE_KEY = "your-anon-key"
+## Supabase setup
 
-Note: App works without Supabase — 
-logging and cache silently disabled.
+1. Create a project at [supabase.com](https://supabase.com).
+2. In **SQL Editor**, create tables (`query_logs`, `response_cache`) — see project history or your saved SQL.
+3. Run all SQL from **`supabase_setup.sql`** (RLS + insert/select policies).
+4. In **Settings → API**, copy **Project URL** and **Publishable** key (not the secret key).
+5. Add to `.env` and Streamlit Cloud Secrets (see below).
 
 ## Deploy on Streamlit Cloud
 
-1. Merge latest code to `main` on GitHub: [yuvrajrajput/swasthya-ai](https://github.com/yuvrajrajput/swasthya-ai)
-2. Open **[share.streamlit.io](https://share.streamlit.io)** → sign in with **GitHub**
-3. Click **Create app** → pick repository **`swasthya-ai`**
-4. Set:
-   - **Branch:** `main`
-   - **Main file path:** `app.py`
-5. Click **Advanced settings** → **Secrets** and paste:
+1. Push latest code to **`main`**: [github.com/yuvrajrajput/swasthya-ai](https://github.com/yuvrajrajput/swasthya-ai)
+2. Open [share.streamlit.io](https://share.streamlit.io) → **Create app** (or open existing)
+3. **Branch:** `main` · **Main file:** `app.py`
+4. **Secrets** (Settings → Secrets):
 
 ```toml
 ANTHROPIC_API_KEY = "sk-ant-your-key-here"
+SUPABASE_URL = "https://xxxx.supabase.co"
+SUPABASE_KEY = "sb_publishable_your-key-here"
 ```
 
-(Get your key from [console.anthropic.com](https://console.anthropic.com/).)
+5. **Deploy** or **Reboot** after each `main` update.
 
-6. Click **Deploy**
+**Cloud notes:**
+- Do not commit `.env` — use Secrets only.
+- First deploy / cold start can take several minutes (embedding model + dependencies).
+- Voice needs **HTTPS**, **mic permission**, and **internet** (Google STT). Recommend **Chrome** on Android.
+- **ffmpeg is not required** for the current voice stack.
 
-Your app URL will look like: `https://swasthya-ai-xxxxx.streamlit.app`
+## Voice (how it works)
 
-**Notes for Cloud:**
-- `packages.txt` installs **ffmpeg** for voice input on the server
-- Do not commit `.env` — use Streamlit **Secrets** only
-- First deploy may take 2–5 minutes
-- Link this URL from your landing page **Try Now** button when ready
+1. Tap **🎤 बोलें** → speak in Hindi/Hinglish → tap **⏹ रोकें**.
+2. Audio is transcribed server-side (`SpeechRecognition` + Google, language `hi-IN`).
+3. Text is sent to chat as `*(आवाज़ से)* …` and Claude replies (streamed).
 
-## Notes
+If voice fails, type symptoms in the box at the bottom.
 
-- Uses model `claude-sonnet-4-6` (Claude Sonnet 4.6).
-- Multi-turn chat with `st.session_state` history sent to Claude each turn.
-- Emergency keywords (e.g. chest pain, seene mein dard, behoshi) trigger an immediate Hindi alert to call **112** before Claude responds.
-- Voice: `st.audio_input` (WebM from browser) → pydub/FFmpeg → WAV → Google speech recognition (Hindi); falls back to a “coming soon” note on older Streamlit.
-- **Milestone 2:** LangChain `ChatAnthropic`, last 3 chat turns only, semantic-style response cache (`response_cache.json`), rich query logs (latency, tokens, cost, cached).
-- This app provides general information only, not medical diagnosis.
+## Architecture notes
+
+- **No medical diagnosis** — general information only; disclaimer shown in-app.
+- **Cache:** Similar first messages reuse a stored reply (cosine on multilingual embeddings); follow-up messages in the same chat are not cached.
+- **Cost:** ~$0.01 per Claude call when cache misses; cached hits cost $0.
+- **Embeddings:** `paraphrase-multilingual-MiniLM-L12-v2` (loaded once, `@st.cache_resource`).
+
+## License
+
+See `LICENSE`.
