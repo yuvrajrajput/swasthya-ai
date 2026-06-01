@@ -3,15 +3,13 @@ import re
 import time
 from collections.abc import Iterator
 from datetime import datetime, timezone
-from urllib.parse import unquote_plus
-
 import numpy as np
 import streamlit as st
-import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from sentence_transformers import SentenceTransformer
+from streamlit_mic_recorder import speech_to_text
 from supabase import create_client
 
 load_dotenv()
@@ -122,172 +120,8 @@ def get_supabase():
 def init_session_state() -> None:
     if "messages" not in st.session_state:
         st.session_state.messages: list[dict[str, str | bool]] = []
-    if "_voice_param_handled" not in st.session_state:
-        st.session_state._voice_param_handled = ""
-
-
-def try_consume_voice_query_param() -> None:
-    """Browser Web Speech sends transcript via ?voice= after mic stops."""
-    raw = st.query_params.get("voice")
-    if not raw:
-        return
-    text = unquote_plus(str(raw).strip())
-    st.query_params.clear()
-    if not text or text == st.session_state._voice_param_handled:
-        return
-    st.session_state._voice_param_handled = text
-    process_user_message(text, from_voice=True)
-
-
-VOICE_BAR_HTML = """
-<div class="dock">
-  <button type="button" id="micBtn" aria-label="बोलें">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-      <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
-      <line x1="12" y1="19" x2="12" y2="23"/>
-      <line x1="8" y1="23" x2="16" y2="23"/>
-    </svg>
-  </button>
-  <div class="dock-text">
-    <div id="status" class="status">माइक दबाएं — हिंदी में बोलें</div>
-    <div id="hint" class="hint">Chrome में सबसे अच्छा • इंटरनेट ज़रूरी</div>
-  </div>
-</div>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #FFF8F3; }
-  .dock {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 14px; background: #fff; border: 1px solid #f0e0d6;
-    border-radius: 16px; box-shadow: 0 2px 12px rgba(255,107,43,0.08);
-  }
-  #micBtn {
-    flex-shrink: 0; width: 48px; height: 48px; border: none; border-radius: 50%;
-    background: linear-gradient(145deg, #FF6B2B, #e85a1f);
-    color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: transform 0.15s, box-shadow 0.15s;
-  }
-  #micBtn:hover { transform: scale(1.04); box-shadow: 0 4px 14px rgba(255,107,43,0.35); }
-  #micBtn.listening {
-    animation: pulse 1.2s ease-in-out infinite;
-    box-shadow: 0 0 0 0 rgba(255,107,43,0.5);
-  }
-  @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(255,107,43,0.45); }
-    70% { box-shadow: 0 0 0 12px rgba(255,107,43,0); }
-    100% { box-shadow: 0 0 0 0 rgba(255,107,43,0); }
-  }
-  .dock-text { flex: 1; min-width: 0; }
-  .status { font-size: 0.95rem; font-weight: 600; color: #1a1a1a; line-height: 1.35; }
-  .hint { font-size: 0.75rem; color: #6b7280; margin-top: 2px; }
-  .status.live { color: #FF6B2B; }
-  .status.err { color: #b91c1c; }
-</style>
-<script>
-(function() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const micBtn = document.getElementById("micBtn");
-  const statusEl = document.getElementById("status");
-  const hintEl = document.getElementById("hint");
-  let recognition = null;
-  let listening = false;
-  let finalText = "";
-
-  function sendVoice(text) {
-    const t = (text || "").trim();
-    if (!t) return;
-    try {
-      const w = window.parent;
-      const u = new URL(w.location.href);
-      u.searchParams.set("voice", t);
-      w.location.search = u.searchParams.toString();
-    } catch (e) {
-      statusEl.textContent = "भेजने में त्रुटि — नीचे टाइप करें";
-      statusEl.className = "status err";
-    }
-  }
-
-  function setIdle() {
-    listening = false;
-    micBtn.classList.remove("listening");
-    statusEl.className = "status";
-    statusEl.textContent = "माइक दबाएं — हिंदी में बोलें";
-    hintEl.textContent = "Chrome में सबसे अच्छा • माइक की अनुमति दें";
-  }
-
-  micBtn.addEventListener("click", function() {
-    if (!SpeechRecognition) {
-      statusEl.textContent = "कृपया Google Chrome इस्तेमाल करें";
-      statusEl.className = "status err";
-      hintEl.textContent = "Safari/Firefox में आवाज़ सीमित है";
-      return;
-    }
-    if (listening && recognition) {
-      recognition.stop();
-      return;
-    }
-    finalText = "";
-    recognition = new SpeechRecognition();
-    recognition.lang = "hi-IN";
-    recognition.interimResults = true;
-    recognition.continuous = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = function() {
-      listening = true;
-      micBtn.classList.add("listening");
-      statusEl.className = "status live";
-      statusEl.textContent = "सुन रहे हैं… फिर माइक दबाकर रोकें";
-      hintEl.textContent = "जैसे: mujhe bukhaar aur sar dard hai";
-    };
-
-    recognition.onresult = function(e) {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) finalText += r[0].transcript;
-        else interim += r[0].transcript;
-      }
-      const show = (finalText + interim).trim();
-      if (show) statusEl.textContent = show;
-    };
-
-    recognition.onerror = function(e) {
-      const msgs = {
-        "not-allowed": "माइक की अनुमति दें (Settings)",
-        "no-speech": "आवाज़ नहीं सुनी — दोबारा बोलें",
-        "network": "इंटरनेट जांचें",
-        "aborted": "रद्द"
-      };
-      statusEl.textContent = msgs[e.error] || ("त्रुटि: " + e.error);
-      statusEl.className = "status err";
-      setIdle();
-    };
-
-    recognition.onend = function() {
-      const t = finalText.trim();
-      listening = false;
-      micBtn.classList.remove("listening");
-      if (t) {
-        sendVoice(t);
-        return;
-      }
-      statusEl.className = "status err";
-      statusEl.textContent = "आवाज़ नहीं सुनी — फिर कोशिश करें";
-      hintEl.textContent = "Chrome • माइक अनुमति • शांत जगह में बोलें";
-    };
-
-    try { recognition.start(); }
-    catch (err) {
-      statusEl.textContent = "माइक शुरू नहीं हो सका";
-      statusEl.className = "status err";
-      setIdle();
-    }
-  });
-})();
-</script>
-"""
+    if "_last_voice_text" not in st.session_state:
+        st.session_state._last_voice_text = ""
 
 
 def detect_emergency(text: str) -> bool:
@@ -617,8 +451,16 @@ def inject_brand_styles() -> None:
             color: #6b7280;
             margin: 0 0 0.35rem 0.15rem;
           }
-          div[data-testid="stVerticalBlock"] > div:has(iframe[title*="streamlit"]) {
-            margin-bottom: 0.25rem;
+          .voice-dock-box {
+            background: #fff;
+            border: 1px solid #f0e0d6;
+            border-radius: 16px;
+            padding: 0.65rem 0.85rem 0.5rem;
+            margin-bottom: 0.5rem;
+            box-shadow: 0 2px 10px rgba(255,107,43,0.06);
+          }
+          iframe[title="streamlit_mic_recorder.streamlit_mic_recorder"] {
+            min-height: 52px;
           }
           [data-testid="stChatInput"] {
             border-radius: 16px !important;
@@ -651,17 +493,42 @@ def render_header() -> None:
     with col_btn:
         if st.button("नई बातचीत", use_container_width=True):
             st.session_state.messages = []
-            st.session_state._voice_param_handled = ""
+            st.session_state._last_voice_text = ""
             st.rerun()
 
 
 def render_voice_input_bar() -> None:
-    """ChatGPT-style mic bar above text input — Web Speech API in browser (Chrome)."""
+    """Mic above chat input — transcript returns to Python (works on mobile)."""
     st.markdown(
-        '<p class="voice-dock-label">🎤 बोलकर बताएं या नीचे लिखें</p>',
+        """
+        <div class="voice-dock-box">
+          <p class="voice-dock-label">🎤 बोलकर बताएं या नीचे लिखें</p>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
-    components.html(VOICE_BAR_HTML, height=92)
+    transcript = speech_to_text(
+        language="hi-IN",
+        start_prompt="🎤 बोलें",
+        stop_prompt="⏹ रोकें",
+        just_once=True,
+        use_container_width=True,
+        key="voice_stt",
+    )
+    st.caption(
+        "टैप → हिंदी में बोलें → ⏹ रोकें। इंटरनेट चाहिए। "
+        "अगर आवाज़ न समझे तो नीचे टाइप करें।"
+    )
+
+    if not transcript:
+        return
+
+    text = str(transcript).strip()
+    if not text or text == st.session_state._last_voice_text:
+        return
+
+    st.session_state._last_voice_text = text
+    process_user_message(text, from_voice=True)
 
 
 def render_empty_chat_hint() -> None:
@@ -698,8 +565,6 @@ def main() -> None:
             "`.env` में `ANTHROPIC_API_KEY` जोड़ें।"
         )
         st.stop()
-
-    try_consume_voice_query_param()
 
     chat_zone = st.container()
     with chat_zone:
