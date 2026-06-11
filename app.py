@@ -445,7 +445,13 @@ def inject_brand_styles() -> None:
         """
         <style>
           .stApp { background-color: #FFF8F3; }
-          .block-container { padding-top: 1.25rem; max-width: 42rem; }
+          [data-testid="stAppViewContainer"] .block-container {
+            padding-top: 0.5rem !important;
+            padding-bottom: 1rem;
+            max-width: 42rem;
+          }
+          [data-testid="stHeader"] { background: transparent; }
+          [data-testid="stDecoration"] { display: none; }
           [data-testid="stChatMessage"] {
             line-height: 1.65;
             background: #fff;
@@ -459,21 +465,22 @@ def inject_brand_styles() -> None:
             font-size: 1.05rem !important;
             margin-top: 0.4rem;
           }
-          .voice-dock-label {
-            font-size: 0.8rem;
-            color: #6b7280;
-            margin: 0 0 0.35rem 0.15rem;
+          .app-header-title {
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1.2 !important;
+            font-size: 1.25rem !important;
           }
-          .voice-dock-box {
-            background: #fff;
-            border: 1px solid #f0e0d6;
-            border-radius: 16px;
-            padding: 0.65rem 0.85rem 0.5rem;
+          .welcome-hint {
+            margin-top: -1rem;
             margin-bottom: 0.5rem;
-            box-shadow: 0 2px 10px rgba(255,107,43,0.06);
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.9rem;
+            line-height: 1.5;
           }
           iframe[title="streamlit_mic_recorder.streamlit_mic_recorder"] {
-            min-height: 52px;
+            min-height: 48px;
           }
           [data-testid="stChatInput"] {
             border-radius: 16px !important;
@@ -483,6 +490,7 @@ def inject_brand_styles() -> None:
           .stButton > button[kind="secondary"] {
             border-radius: 10px;
             border-color: #f0e0d6;
+            white-space: nowrap;
           }
         </style>
         """,
@@ -491,20 +499,30 @@ def inject_brand_styles() -> None:
 
 
 def render_header() -> None:
-    col_logo, col_title, col_btn = st.columns([1, 5, 2], vertical_alignment="center")
-    with col_logo:
-        if os.path.isfile(LOGO_PATH):
-            st.image(LOGO_PATH, width=48)
-        else:
-            st.markdown("### 🩺")
-    with col_title:
-        st.markdown("### Swasthya AI")
-        st.caption(
-            "हिंदी या Hinglish में बात करें — सरल सुझाव पाएं "
-            "(जैसे: mujhe bukhaar hai aur headache ho raha hai)"
-        )
+    col_main, col_btn = st.columns([4, 1], vertical_alignment="center")
+    with col_main:
+        col_logo, col_title = st.columns([1, 5], vertical_alignment="center")
+        with col_logo:
+            if os.path.isfile(LOGO_PATH):
+                st.image(LOGO_PATH, width=44)
+            else:
+                st.markdown("### 🩺")
+        with col_title:
+            st.markdown(
+                '<p class="app-header-title"><strong>Swasthya AI</strong></p>',
+                unsafe_allow_html=True,
+            )
+            st.caption(
+                "हिंदी या Hinglish में बात करें — सरल सुझाव पाएं "
+                "(जैसे: mujhe bukhaar hai aur headache ho raha hai)"
+            )
     with col_btn:
-        if st.button("नई बातचीत", use_container_width=True):
+        if st.button(
+            "नई बातचीत",
+            type="secondary",
+            use_container_width=False,
+            key="new_chat_btn",
+        ):
             st.session_state.messages = []
             st.session_state._last_voice_text = ""
             st.rerun()
@@ -512,26 +530,15 @@ def render_header() -> None:
 
 def render_voice_input_bar() -> None:
     """Mic above chat input — transcript returns to Python (works on mobile)."""
-    st.markdown(
-        """
-        <div class="voice-dock-box">
-          <p class="voice-dock-label">🎤 बोलकर बताएं या नीचे लिखें</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     transcript = speech_to_text(
         language="hi-IN",
-        start_prompt="🎤 बोलें",
+        start_prompt="🎤 बोलकर बताएं",
         stop_prompt="⏹ रोकें",
         just_once=True,
         use_container_width=True,
         key="voice_stt",
     )
-    st.caption(
-        "टैप → हिंदी में बोलें → ⏹ रोकें। इंटरनेट चाहिए। "
-        "अगर आवाज़ न समझे तो नीचे टाइप करें।"
-    )
+    st.caption("🎤 Tap → Hindi mein bolein → Stop")
 
     if not transcript:
         return
@@ -548,12 +555,9 @@ def render_empty_chat_hint() -> None:
     if not st.session_state.messages:
         st.markdown(
             """
-            <div style="text-align:center;padding:2rem 1rem;color:#6b7280;">
-              <p style="font-size:1.05rem;margin-bottom:0.5rem;">👋 नमस्ते!</p>
-              <p style="font-size:0.9rem;line-height:1.5;">
-                लक्षण बताएं — हिंदी या Hinglish में।<br>
-                <strong>माइक</strong> दबाएं या नीचे <strong>टाइप</strong> करें।
-              </p>
+            <div class="welcome-hint">
+              लक्षण बताएं — हिंदी या Hinglish में।
+              माइक दबाएं या नीचे टाइप करें।
             </div>
             """,
             unsafe_allow_html=True,
