@@ -8,7 +8,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from streamlit_mic_recorder import speech_to_text
 from supabase import create_client
 
@@ -18,6 +18,7 @@ MODEL = "claude-sonnet-4-6"
 LOGO_PATH = "swasthya-ai-icon.svg"
 MAX_HISTORY_TURNS = 3
 CACHE_SIMILARITY_THRESHOLD = 0.88
+EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 INPUT_COST_PER_MTOK = 3.0
 OUTPUT_COST_PER_MTOK = 15.0
 
@@ -92,10 +93,9 @@ def get_llm() -> ChatAnthropic:
 
 
 @st.cache_resource(show_spinner="Model load ho raha hai...")
-def get_embedder():
-    return SentenceTransformer(
-        'paraphrase-multilingual-MiniLM-L12-v2'
-    )
+def get_embedder() -> TextEmbedding:
+    # ONNX embeddings — no PyTorch; works on Streamlit Cloud free tier.
+    return TextEmbedding(model_name=EMBEDDING_MODEL)
 
 
 def _env_or_secret(name: str) -> str | None:
@@ -155,7 +155,11 @@ def estimate_cost_usd(input_tokens: int, output_tokens: int) -> float:
 
 def get_embedding(text: str) -> np.ndarray:
     model = get_embedder()
-    return model.encode(text, normalize_embeddings=True)
+    vec = np.asarray(next(model.embed([text])), dtype=np.float32)
+    norm = float(np.linalg.norm(vec))
+    if norm > 0:
+        vec = vec / norm
+    return vec
 
 
 def log_query_metrics(

@@ -1,15 +1,10 @@
-# CPU-only PyTorch — full GPU torch (~2GB) times out on Streamlit Cloud free tier.
-# Must appear before sentence-transformers.
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.5.1+cpu
-
 streamlit>=1.40.0,<2
 anthropic>=0.39.0
 python-dotenv>=1.0.0
-streamlit-mic-recorder>=0.0.8
-SpeechRecognition>=3.10.0
-langchain-anthropic>=0.3.0
-langchain-core>=0.3.0
+streamlit-mic-recorder==0.0.8
+SpeechRecognition>=3.10.0,<4
+langchain-anthropic>=0.3.0,<1
+langchain-core>=0.3.0,<1
 numpy>=1.26.0,<2.1
-sentence-transformers>=3.0.0,<6
+fastembed>=0.4.0,<1
 supabase>=2.0.0,<3
