@@ -472,15 +472,46 @@ def inject_brand_styles() -> None:
             font-size: 1.25rem !important;
           }
           .welcome-hint {
-            margin-top: -1rem;
-            margin-bottom: 0.5rem;
+            margin: 0;
             text-align: center;
             color: #6b7280;
             font-size: 0.9rem;
             line-height: 1.5;
           }
+          [data-testid="stVerticalBlock"]:has(#chat-area-top) {
+            min-height: calc(100dvh - 300px);
+            padding-bottom: 13rem;
+          }
+          .chat-empty-state {
+            min-height: calc(100dvh - 380px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          [data-testid="stVerticalBlock"]:has(#voice-dock-marker) {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
+            width: min(42rem, calc(100% - 2rem));
+            z-index: 998;
+            background: #FFF8F3;
+            padding: 0.35rem 0.25rem 0;
+            border-top: 1px solid #f0e0d6;
+            box-shadow: 0 -6px 20px rgba(255, 248, 243, 0.97);
+          }
+          [data-testid="stVerticalBlock"]:has(#voice-dock-marker) p {
+            margin: 0.15rem 0 0 !important;
+            font-size: 0.75rem !important;
+            color: #6b7280 !important;
+          }
           iframe[title="streamlit_mic_recorder.streamlit_mic_recorder"] {
             min-height: 48px;
+          }
+          [data-testid="stBottomBlock"] {
+            background: #FFF8F3 !important;
+            border-top: none !important;
+            padding-bottom: env(safe-area-inset-bottom, 0px);
           }
           [data-testid="stChatInput"] {
             border-radius: 16px !important;
@@ -539,6 +570,9 @@ def render_voice_input_bar() -> None:
         key="voice_stt",
     )
     st.caption("🎤 Tap → Hindi mein bolein → Stop")
+    st.caption(
+        "⚠️ यह ऐप चिकित्सा निदान नहीं देता। गंभीर लक्षणों के लिए डॉक्टर से मिलें।"
+    )
 
     if not transcript:
         return
@@ -555,9 +589,11 @@ def render_empty_chat_hint() -> None:
     if not st.session_state.messages:
         st.markdown(
             """
-            <div class="welcome-hint">
-              लक्षण बताएं — हिंदी या Hinglish में।
-              माइक दबाएं या नीचे टाइप करें।
+            <div class="chat-empty-state">
+              <div class="welcome-hint">
+                लक्षण बताएं — हिंदी या Hinglish में।
+                माइक दबाएं या नीचे टाइप करें।
+              </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -583,21 +619,17 @@ def main() -> None:
         )
         st.stop()
 
-    chat_zone = st.container()
-    with chat_zone:
-        render_empty_chat_hint()
-        render_chat_history()
+    st.markdown('<span id="chat-area-top"></span>', unsafe_allow_html=True)
+    render_empty_chat_hint()
+    render_chat_history()
 
-    input_zone = st.container()
-    with input_zone:
-        render_voice_input_bar()
-        prompt = st.chat_input("अपने लक्षण लिखें…")
-        if prompt:
-            process_user_message(prompt)
+    st.markdown('<span id="voice-dock-marker"></span>', unsafe_allow_html=True)
+    render_voice_input_bar()
 
-    st.caption(
-        "⚠️ यह ऐप चिकित्सा निदान नहीं देता। गंभीर लक्षणों के लिए डॉक्टर से मिलें।"
-    )
+    prompt = st.chat_input("अपने लक्षण लिखें…")
+    if prompt:
+        process_user_message(prompt)
+
     log_err = st.session_state.get("_last_log_error")
     if log_err:
         st.warning(f"Query log (Supabase): {log_err}")
